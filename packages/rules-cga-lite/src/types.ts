@@ -4,7 +4,7 @@ import { z } from 'zod';
 export const RuleSchema = z.discriminatedUnion('op', [
   z.object({
     op: z.literal('extrude'),
-    h: z.number().positive(),
+    h: z.number().min(0), // Allow zero height
     mode: z.enum(['world', 'local']).optional()
   }),
   z.object({
@@ -49,7 +49,7 @@ export const RuleSchema = z.discriminatedUnion('op', [
 export const RuleProgramSchema = z.object({
   name: z.string(),
   description: z.string().optional(),
-  attrs: z.record(z.union([z.string(), z.number(), z.boolean()])).optional().default({}),
+  attrs: z.record(z.union([z.string(), z.number(), z.boolean()])).optional(),
   rules: z.array(RuleSchema)
 });
 

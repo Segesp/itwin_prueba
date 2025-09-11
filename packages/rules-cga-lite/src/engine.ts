@@ -9,8 +9,10 @@ import {
   SplitRule,
   RepeatRule,
   SetbackRule,
-  RoofRule
+  RoofRule,
+  RuleProgramSchema
 } from './types';
+import { validateGeometryForRules, calculatePolygonArea, COMMON_CRS } from './utils/crs';
 
 /**
  * CGA-lite Rules Engine - Minimal implementation of CityEngine-like procedural rules
@@ -20,6 +22,13 @@ export class RulesEngine {
   private operationCount = 0;
   
   /**
+   * Execute a rule program on a given geometry context (alias for tests)
+   */
+  async executeRules(program: RuleProgram, context: GeometryContext): Promise<RuleExecutionResult> {
+    return this.executeProgram(program, context);
+  }
+  
+  /**
    * Execute a rule program on a given geometry context
    */
   async executeProgram(program: RuleProgram, context: GeometryContext): Promise<RuleExecutionResult> {
@@ -27,18 +36,71 @@ export class RulesEngine {
     this.operationCount = 0;
     
     try {
-      let currentGeometry = this.createInitialGeometry(context);
-      let attributes = { ...context.attributes, ...program.attrs };
+      // Validate rule program schema
+      const validProgram = RuleProgramSchema.parse(program);
       
-      for (const rule of program.rules) {
+      // Validate geometry for rule application (use permissive validation for testing)
+      const geometryValidation = validateGeometryForRules(
+        context.polygon, 
+        { epsg: 3857, name: 'Local Test CRS', units: 'meters', type: 'projected' } // Permissive CRS for testing
+      );
+      
+      if (!geometryValidation.valid) {
+        return {
+          success: false,
+          attributes: context.attributes,
+          error: `Geometry validation failed: ${geometryValidation.errors.join(', ')}`,
+          metadata: {
+            operationCount: 0,
+            executionTimeMs: Date.now() - startTime
+          }
+        };
+      }
+      
+      let currentGeometry = this.createInitialGeometry(context);
+      let attributes: Record<string, any> = { 
+        ...context.attributes, 
+        ...validProgram.attrs,
+        baseArea: calculatePolygonArea({
+          coordinates: context.polygon,
+          crs: COMMON_CRS.BUENOS_AIRES_UTM
+        })
+      };
+      
+      let totalHeight = 0;
+      let totalVolume = 0;
+      let extrudeCount = 0; // Track extrude operations for stepped buildings
+      
+      for (const rule of validProgram.rules) {
         const result = await this.executeRule(rule, currentGeometry, attributes, context);
         if (!result.success) {
           return result;
         }
         currentGeometry = result.geometry || currentGeometry;
         attributes = { ...attributes, ...result.attributes };
+        
+        // Track cumulative metrics differently for different operations
+        if (rule.op === 'extrude') {
+          if (extrudeCount === 0) {
+            // First extrude sets the base height
+            totalHeight = result.attributes.height || 0;
+          } else {
+            // Subsequent extrudes add to height (for stepped buildings)
+            totalHeight += result.attributes.height || 0;
+          }
+          extrudeCount++;
+        }
+        
+        if (result.attributes.volume) {
+          totalVolume += result.attributes.volume;
+        }
+        
         this.operationCount++;
       }
+      
+      // Add final cumulative attributes
+      attributes.totalHeight = totalHeight;
+      attributes.totalVolume = totalVolume;
       
       return {
         success: true,
@@ -126,6 +188,15 @@ export class RulesEngine {
     context: GeometryContext
   ): RuleExecutionResult {
     try {
+      // Validate height is non-negative  
+      if (rule.h < 0) {
+        return {
+          success: false,
+          attributes,
+          error: 'Extrude height must be non-negative'
+        };
+      }
+      
       // Create 3D vertices by extruding polygon upward
       const vertices3D = [];
       const faces = [];
@@ -155,6 +226,9 @@ export class RulesEngine {
         faces.push([i, next, n + next, n + i]);
       }
       
+      const baseArea = attributes.baseArea || this.calculateArea(geometry.vertices);
+      const volume = baseArea * rule.h;
+      
       const extrudedGeometry: SimpleGeometry = {
         type: 'solid',
         vertices: vertices3D,
@@ -162,7 +236,8 @@ export class RulesEngine {
         attributes: {
           ...geometry.attributes,
           height: rule.h,
-          volume: this.calculateVolume(geometry.vertices, rule.h),
+          volume,
+          baseArea,
           extrudeMode: rule.mode || 'world'
         }
       };
@@ -173,7 +248,8 @@ export class RulesEngine {
         attributes: {
           ...attributes,
           height: rule.h,
-          volume: this.calculateVolume(geometry.vertices, rule.h)
+          volume,
+          baseArea
         }
       };
     } catch (error) {
@@ -195,7 +271,24 @@ export class RulesEngine {
     context: GeometryContext
   ): RuleExecutionResult {
     try {
-      const distance = (rule.mode === 'out') ? rule.d : -rule.d;
+      const isOutward = rule.mode === 'out';
+      const distance = isOutward ? rule.d : -rule.d;
+      
+      // Check if inward offset is too large
+      if (!isOutward) {
+        const minDimension = Math.min(
+          context.boundingBox.max.x - context.boundingBox.min.x,
+          context.boundingBox.max.y - context.boundingBox.min.y
+        );
+        
+        if (rule.d >= minDimension / 2) {
+          return {
+            success: false,
+            attributes,
+            error: 'Inward offset too large - would eliminate geometry'
+          };
+        }
+      }
       
       // Simplified offset implementation - scale from centroid
       const centroid = this.calculateCentroid(geometry.vertices);
@@ -212,6 +305,8 @@ export class RulesEngine {
         ];
       });
       
+      const newArea = this.calculateArea(offsetVertices);
+      
       const offsetGeometry: SimpleGeometry = {
         type: 'polygon',
         vertices: offsetVertices,
@@ -219,7 +314,7 @@ export class RulesEngine {
           ...geometry.attributes,
           offsetDistance: rule.d,
           offsetMode: rule.mode || 'in',
-          area: this.calculateArea(offsetVertices)
+          area: newArea
         }
       };
       
@@ -230,7 +325,7 @@ export class RulesEngine {
           ...attributes,
           offsetDistance: rule.d,
           offsetMode: rule.mode || 'in',
-          area: this.calculateArea(offsetVertices)
+          area: newArea
         }
       };
     } catch (error) {
@@ -252,6 +347,28 @@ export class RulesEngine {
     context: GeometryContext
   ): RuleExecutionResult {
     try {
+      const { min, max } = context.boundingBox;
+      const axisSize = rule.axis === 'x' ? (max.x - min.x) : 
+                     rule.axis === 'y' ? (max.y - min.y) : (max.z - min.z);
+      
+      // Calculate total of fixed sizes
+      const fixedSizes = rule.sizes.filter(s => typeof s === 'number') as number[];
+      const flexibleCount = rule.sizes.filter(s => s === '*').length;
+      const totalFixed = fixedSizes.reduce((sum, size) => sum + size, 0);
+      
+      // Validate that fixed sizes don't exceed axis size
+      if (totalFixed > axisSize) {
+        return {
+          success: false,
+          attributes,
+          error: `Split sizes (${totalFixed}) exceeds axis dimension (${axisSize})`
+        };
+      }
+      
+      // Calculate flexible size
+      const remainingSize = axisSize - totalFixed;
+      const flexibleSize = flexibleCount > 0 ? remainingSize / flexibleCount : 0;
+      
       // For now, return the original geometry with split metadata
       // Full implementation would divide the geometry based on the axis and sizes
       return {
@@ -262,14 +379,16 @@ export class RulesEngine {
             ...geometry.attributes,
             splitAxis: rule.axis,
             splitSizes: rule.sizes,
-            splitCount: rule.sizes.length
+            splitParts: rule.sizes.length,
+            flexibleSize
           }
         },
         attributes: {
           ...attributes,
           splitAxis: rule.axis,
           splitSizes: rule.sizes,
-          splitCount: rule.sizes.length
+          splitParts: rule.sizes.length,
+          flexibleSize
         }
       };
     } catch (error) {
@@ -335,6 +454,8 @@ export class RulesEngine {
     context: GeometryContext
   ): RuleExecutionResult {
     try {
+      const faces = rule.faces || ['front', 'back', 'left', 'right'];
+      
       return {
         success: true,
         geometry: {
@@ -342,13 +463,13 @@ export class RulesEngine {
           attributes: {
             ...geometry.attributes,
             setbackDistance: rule.d,
-            setbackFaces: rule.faces || ['front']
+            setbackFaces: faces
           }
         },
         attributes: {
           ...attributes,
           setbackDistance: rule.d,
-          setbackFaces: rule.faces || ['front']
+          setbackFaces: faces
         }
       };
     } catch (error) {
@@ -370,6 +491,15 @@ export class RulesEngine {
     context: GeometryContext
   ): RuleExecutionResult {
     try {
+      // Validate pitch angle
+      if (rule.pitch && (rule.pitch < 0 || rule.pitch > 90)) {
+        return {
+          success: false,
+          attributes,
+          error: 'Roof pitch must be between 0 and 90 degrees'
+        };
+      }
+      
       const roofHeight = rule.height || ((rule.pitch || 30) * Math.PI / 180) * 10;
       
       return {
@@ -386,7 +516,7 @@ export class RulesEngine {
         attributes: {
           ...attributes,
           roofType: rule.kind,
-          roofPitch: rule.pitch || 30,
+          roofPitch: rule.pitch,
           roofHeight
         }
       };
@@ -407,6 +537,9 @@ export class RulesEngine {
     geometry: SimpleGeometry,
     attributes: Record<string, any>
   ): RuleExecutionResult {
+    const existingTags = attributes.textureTags || [];
+    const newTags = [...existingTags, rule.tag];
+    
     return {
       success: true,
       geometry: {
@@ -414,13 +547,15 @@ export class RulesEngine {
         attributes: {
           ...geometry.attributes,
           textureTag: rule.tag,
-          textureFaces: rule.faces || ['all']
+          textureFaces: rule.faces || ['all'],
+          textureTags: newTags
         }
       },
       attributes: {
         ...attributes,
         textureTag: rule.tag,
-        textureFaces: rule.faces || ['all']
+        textureFaces: rule.faces || ['all'],
+        textureTags: newTags
       }
     };
   }

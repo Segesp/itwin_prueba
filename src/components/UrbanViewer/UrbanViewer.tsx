@@ -35,6 +35,14 @@ import {
   Assessment as AssessmentIcon
 } from '@mui/icons-material';
 
+// Import environment validation
+import { 
+  validateEnvironmentOnStartup, 
+  shouldUseSimulationFallback,
+  getITwinAuthConfig,
+  getITwinPlatformConfig 
+} from '../../utils/env-validation';
+
 // Import iTwin.js components (will be implemented as the deps install)
 // Note: These imports will work once we install the iTwin packages
 let Viewer: any;
@@ -128,6 +136,16 @@ const UrbanViewer: React.FC<UrbanViewerProps> = () => {
 
   // Initialize viewer
   useEffect(() => {
+    // Validate environment on startup
+    try {
+      validateEnvironmentOnStartup();
+    } catch (error) {
+      console.error('Environment validation failed:', error);
+      setError(`Configuration error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      setIsLoading(false);
+      return;
+    }
+
     initializeViewer();
     
     return () => {
@@ -143,19 +161,16 @@ const UrbanViewer: React.FC<UrbanViewerProps> = () => {
       setIsLoading(true);
       setError(null);
       
-      // Check if iTwin.js environment variables are configured
-      const iTwinId = typeof process !== 'undefined' && process.env?.IMJS_ITWIN_ID;
-      const iModelId = typeof process !== 'undefined' && process.env?.IMJS_IMODEL_ID;
-      const clientId = typeof process !== 'undefined' && process.env?.IMJS_AUTH_CLIENT_CLIENT_ID;
+      // Check if simulation fallback should be used (addresses BLOCKER 6)
+      const useSimulation = shouldUseSimulationFallback();
       
-      if (!iTwinId || !iModelId || !clientId) {
-        // Fall back to simulated viewer if iTwin.js is not configured
-        console.warn('iTwin.js environment not configured, using simulated viewer');
+      if (useSimulation) {
+        console.warn('Using simulation fallback - iTwin.js not fully configured or explicitly disabled');
         await initializeSimulatedViewer();
         return;
       }
 
-      // Try to initialize iTwin.js viewer
+      // Try to initialize iTwin.js viewer with proper configuration
       try {
         await initializeITwinViewer();
       } catch (iTwinError) {
@@ -181,6 +196,14 @@ const UrbanViewer: React.FC<UrbanViewerProps> = () => {
         throw new Error('Server-side rendering not supported for iTwin.js');
       }
 
+      // Get validated configuration
+      const authConfig = getITwinAuthConfig();
+      const platformConfig = getITwinPlatformConfig();
+      
+      if (!authConfig || !platformConfig) {
+        throw new Error('iTwin.js configuration not available');
+      }
+
       // Try to dynamically import iTwin.js modules (using variables to prevent webpack from bundling)
       const iTwinPackage = '@itwin/web-viewer-react';
       const corePackage = '@itwin/core-frontend';
@@ -197,12 +220,19 @@ const UrbanViewer: React.FC<UrbanViewerProps> = () => {
       Viewer = iTwinModule.Viewer;
       IModelApp = coreModule.IModelApp;
       
-      // Initialize iTwin.js application
-      await IModelApp.startup();
+      // Initialize iTwin.js application with validated configuration
+      await IModelApp.startup({
+        authorizationClient: authConfig
+      });
+      
       setITwinInitialized(true);
       setViewerInitialized(true);
       
-      console.log('iTwin.js viewer initialized successfully');
+      console.log('iTwin.js viewer initialized successfully with configuration:', {
+        iTwinId: platformConfig.iTwinId,
+        iModelId: platformConfig.iModelId,
+        authEnabled: true
+      });
       
     } catch (error) {
       throw new Error(`Failed to initialize iTwin.js: ${error instanceof Error ? error.message : 'Unknown error'}`);
