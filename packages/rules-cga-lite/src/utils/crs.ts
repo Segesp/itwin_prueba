@@ -32,6 +32,27 @@ export const COMMON_CRS: Record<string, CRS> = {
     name: 'POSGAR 2007 / Argentina 4',
     units: 'meters',
     type: 'projected'
+  },
+  // Chancay (Lima) - WGS84/UTM 18S - Primary CRS for Peru coastal projects
+  CHANCAY_UTM_WGS84: {
+    epsg: 32718,
+    name: 'WGS 84 / UTM zone 18S',
+    units: 'meters',
+    type: 'projected'
+  },
+  // Chancay (Lima) - Peru96/UTM 18S - National cartographic standard
+  CHANCAY_UTM_PERU96: {
+    epsg: 5387,
+    name: 'Peru96 / UTM zone 18S',
+    units: 'meters', 
+    type: 'projected'
+  },
+  // Peru - Geographic WGS84
+  PERU_GEO: {
+    epsg: 4326,
+    name: 'WGS 84',
+    units: 'degrees',
+    type: 'geographic'
   }
 };
 
@@ -74,7 +95,11 @@ export function validateCoordinateUnits(
     const minY = Math.min(...coordinates.map(c => c[1]));
     const maxY = Math.max(...coordinates.map(c => c[1]));
     
-    // Only flag if coordinates are negative or extremely large (likely incorrect)
+    // Flag if coordinates are too small (likely incorrect units) or extremely large
+    if (maxX < 1000 && maxY < 1000) {
+      errors.push(`X coordinates out of expected range for UTM: ${minX} - ${maxX}`);
+    }
+    
     if (minX < -1000000 || maxX > 10000000) {
       errors.push(`X coordinates out of reasonable range: ${minX} - ${maxX}`);
     }
@@ -185,7 +210,7 @@ export function validateGeometryForRules(
       Math.pow(curr[0] - next[0], 2) + Math.pow(curr[1] - next[1], 2)
     );
     
-    if (distance < 1e-6) {
+    if (distance === 0 || distance < 0.01) { // Exact duplicates or very close points
       warnings.push(`Duplicate consecutive vertices at index ${i}`);
     }
   }
@@ -204,8 +229,10 @@ export function validateGeometryForRules(
     errors.push(`Winding order validation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
   
-  // Check for self-intersections (basic check)
-  if (hasBasicSelfIntersections(coordinates)) {
+  // Check for self-intersections (basic check) - only if we have enough valid vertices
+  if (coordinates.length >= 4 && !hasBasicSelfIntersections(coordinates)) {
+    // No self-intersections detected
+  } else if (coordinates.length >= 4) {
     errors.push('Polygon appears to have self-intersections');
   }
   
@@ -271,4 +298,96 @@ export function toITwinCoordinates(
   
   // For now, ensure counter-clockwise winding and return
   return ensureCounterClockwise(coordinates);
+}
+
+/**
+ * Validate coordinates for Chancay (Lima) urban development
+ * Chancay is located at approximately: 11.57°S, 77.27°W
+ */
+export function validateChancayCoordinates(
+  coordinates: number[][],
+  crs: CRS
+): { valid: boolean; errors: string[]; warnings: string[] } {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+  
+  if (crs.epsg === 32718) { // WGS84/UTM 18S
+    // Chancay area bounds in UTM 18S (approximate)
+    // Easting: ~272,000 - 285,000, Northing: ~8,720,000 - 8,740,000
+    const eastings = coordinates.map(c => c[0]);
+    const northings = coordinates.map(c => c[1]);
+    
+    const minE = Math.min(...eastings);
+    const maxE = Math.max(...eastings);
+    const minN = Math.min(...northings);
+    const maxN = Math.max(...northings);
+    
+    if (minE < 250000 || maxE > 300000) {
+      warnings.push(`Easting coordinates may be outside Chancay area: ${minE.toFixed(0)} - ${maxE.toFixed(0)}`);
+    }
+    
+    if (minN < 8700000 || maxN > 8750000) {
+      warnings.push(`Northing coordinates may be outside Chancay area: ${minN.toFixed(0)} - ${maxN.toFixed(0)}`);
+    }
+  }
+  
+  if (crs.epsg === 5387) { // Peru96/UTM 18S
+    // Similar bounds but with Peru96 datum (slight offset from WGS84)
+    const eastings = coordinates.map(c => c[0]);
+    const northings = coordinates.map(c => c[1]);
+    
+    const minE = Math.min(...eastings);
+    const maxE = Math.max(...eastings);
+    const minN = Math.min(...northings);
+    const maxN = Math.max(...northings);
+    
+    if (minE < 250000 || maxE > 300000) {
+      warnings.push(`Peru96 Easting coordinates may be outside Chancay area: ${minE.toFixed(0)} - ${maxE.toFixed(0)}`);
+    }
+    
+    if (minN < 8700000 || maxN > 8750000) {
+      warnings.push(`Peru96 Northing coordinates may be outside Chancay area: ${minN.toFixed(0)} - ${maxN.toFixed(0)}`);
+    }
+  }
+  
+  if (crs.epsg === 4326) { // Geographic WGS84
+    // Chancay bounds in decimal degrees: ~77.3°W to 77.2°W, 11.6°S to 11.5°S
+    const lons = coordinates.map(c => c[0]);
+    const lats = coordinates.map(c => c[1]);
+    
+    const minLon = Math.min(...lons);
+    const maxLon = Math.max(...lons);
+    const minLat = Math.min(...lats);
+    const maxLat = Math.max(...lats);
+    
+    if (minLon < -77.4 || maxLon > -77.1) {
+      warnings.push(`Longitude may be outside Chancay area: ${minLon.toFixed(4)}° - ${maxLon.toFixed(4)}°`);
+    }
+    
+    if (minLat < -11.7 || maxLat > -11.4) {
+      warnings.push(`Latitude may be outside Chancay area: ${minLat.toFixed(4)}° - ${maxLat.toFixed(4)}°`);
+    }
+  }
+  
+  return { valid: errors.length === 0, errors, warnings };
+}
+
+/**
+ * Get recommended CRS for Chancay urban development
+ */
+export function getRecommendedChancayCRS(): CRS {
+  // WGS84/UTM 18S is recommended for international compatibility
+  // and integration with global datasets like OpenStreetMap
+  return COMMON_CRS.CHANCAY_UTM_WGS84;
+}
+
+/**
+ * Get alternative CRS options for Chancay
+ */
+export function getChancayCRSOptions(): { primary: CRS; alternative: CRS; geographic: CRS } {
+  return {
+    primary: COMMON_CRS.CHANCAY_UTM_WGS84,      // International standard
+    alternative: COMMON_CRS.CHANCAY_UTM_PERU96,  // National cartographic standard
+    geographic: COMMON_CRS.PERU_GEO              // For web mapping and data exchange
+  };
 }
