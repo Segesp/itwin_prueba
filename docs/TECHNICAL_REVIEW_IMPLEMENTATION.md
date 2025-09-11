@@ -137,11 +137,76 @@ getRegionalContextTilesets('chancay'): Promise<TilesetInfo[]>
 - Efficient coordinate system transformations
 - Graceful API fallbacks for development environments
 
-## 🚀 Next Steps
+## ✅ KPI Schema Validation Enhancement
 
-1. **Complete Unit Test Fixes**: Address the 1 remaining test edge case
-2. **ECSQL KPI Dashboard**: Urban metrics (FAR, GSI, building heights) 
-3. **OSM Street Network Import**: Lot subdivision algorithms
-4. **Production Deployment**: Full iTwin Hub integration with real credentials
+**Status: IMPLEMENTED**
+
+### BIS Class Structure Documentation
+Following technical review feedback, the KPI service now uses proper BIS classes instead of JsonProperties:
+
+#### Building Elements Schema
+```typescript
+// Primary class for CGA-generated buildings
+classFullName: "Generic:GenericPhysicalObject"
+
+// Alternative for iModels with urban schema  
+classFullName: "bis.Building"
+
+// Category identification
+Category.CodeValue = 'Building'
+```
+
+#### Native BIS Properties (replacing JsonProperties)
+```sql
+-- Height calculation from bounding box
+COALESCE(bb.High.Z - bb.Low.Z, 25.0) as height
+
+-- Volume from geometric element (native BIS)
+COALESCE(g.Volume, g.Surface * height) as volume
+
+-- Surface area from geometric element (native BIS)
+COALESCE(g.Surface, 100.0) as footprintArea
+
+-- Floor area calculation
+COALESCE(g.Volume / NULLIF(height, 0), g.Surface * 3.5) as floorArea
+```
+
+#### Spatial Hierarchy
+```sql
+-- Block organization via SpatialLocationElement
+JOIN BisCore.SpatialLocationElement spatial ON spatial.ECInstanceId = e.Parent.Id
+
+-- Lot organization via hierarchical parent relationships  
+JOIN BisCore.SpatialLocationElement lot ON lot.ECInstanceId = spatial.Parent.Id
+```
+
+### Production ECSQL Queries
+Enhanced queries avoid `json_extract(JsonProperties)` pattern:
+
+```sql
+-- Buildings query using proper BIS classes
+SELECT 
+  e.ECInstanceId as elementId,
+  COALESCE(bb.High.Z - bb.Low.Z, 25.0) as height,
+  COALESCE(g.Surface, 100.0) as footprintArea,
+  COALESCE(g.Volume, g.Surface * height) as volume,
+  spatial.UserLabel as blockId,
+  c.CodeValue as category
+FROM BisCore.PhysicalElement e
+JOIN BisCore.Category c ON e.Category.Id = c.ECInstanceId
+JOIN BisCore.GeometricElement3d g ON e.ECInstanceId = g.ECInstanceId
+LEFT JOIN BisCore.ElementAspect bb ON e.ECInstanceId = bb.Element.Id
+LEFT JOIN BisCore.SpatialLocationElement spatial ON spatial.ECInstanceId = e.Parent.Id
+WHERE (c.CodeValue = 'Building' OR e.classFullName = 'Generic:GenericPhysicalObject')
+  AND e.Parent IS NOT NULL
+  AND g.Volume IS NOT NULL
+```
+
+### Type Safety & Performance Benefits
+- **Native BIS Properties**: Better query performance, no JSON parsing overhead
+- **Type Safety**: Strongly typed geometric properties vs. dynamic JSON extraction  
+- **Schema Validation**: Proper BIS class relationships ensure data integrity
+- **Standards Compliance**: Follows iTwin.js ECSQL best practices
+
 
 This implementation provides a solid foundation for the **Chancay Digital Twin** with **CityEngine parity** over **iTwin.js** and cutting-edge web technologies.
