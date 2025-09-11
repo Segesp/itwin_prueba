@@ -2,18 +2,24 @@
 
 Este repositorio contiene toda la documentación de la librería iTwin.js de JavaScript, organizada de manera integral y completa, **además de una plataforma web funcional** para gemelos digitales urbanos.
 
-## 🌐 Plataforma Web - Gemelo Digital Urbano
+## 🌐 Plataforma Web - Gemelo Digital Urbano de Chancay
 
 ### 🚀 **[Ver Plataforma Web Completa](./PLATFORM.md)**
 
-**¡Nueva!** Plataforma web completa desarrollada para el gemelo digital urbano de Buenos Aires:
+**¡Nueva!** Plataforma web completa desarrollada para el gemelo digital urbano del **Puerto de Chancay, Perú**:
 
-- **🏙️ Visor 3D interactivo** con navegación inmersiva por Buenos Aires
-- **📊 Dashboard en tiempo real** con datos de sensores IoT urbanos  
+- **🏙️ Visor 3D interactivo** con navegación inmersiva por Chancay y el puerto
+- **📊 Dashboard en tiempo real** con datos de sensores IoT portuarios y urbanos  
 - **👥 Portal ciudadano** para reportes y participación urbana
-- **🎮 Simulador de escenarios** (tráfico, emergencias, desarrollo urbano)
-- **🏛️ Panel administrativo** para gestión urbana integral
+- **🎮 Simulador de escenarios** (tráfico portuario, emergencias, desarrollo urbano)
+- **🏛️ Panel administrativo** para gestión urbana y portuaria integral
 - **📱 Diseño responsive** optimizado para móviles y desktop
+- **🌍 CRS Chancay**: Configurado para **WGS84 / UTM Zone 18S (EPSG:32718)**
+
+#### Configuración CRS y Coordenadas
+- **CRS Primario**: EPSG:32718 (WGS84 / UTM Zone 18S)
+- **CRS Alternativo**: EPSG:5387 (Peru96 / UTM Zone 18S) para reproyección si necesario
+- **Punto de Referencia**: Puerto de Chancay (≈ -11.593, -77.277)
 
 #### Inicio Rápido de la Plataforma
 ```bash
