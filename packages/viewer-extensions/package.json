@@ -1,0 +1,31 @@
+{
+  "name": "@itwin-dt/viewer-extensions",
+  "version": "1.0.0",
+  "description": "UI extensions for iTwin viewer - rule editor, scenario compare, KPIs",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch"
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "@mui/material": "^5.15.0",
+    "@mui/icons-material": "^5.15.0",
+    "monaco-editor": "^0.44.0",
+    "@itwin-dt/rules-cga-lite": "file:../rules-cga-lite"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3",
+    "@types/react": "^18.2.45"
+  },
+  "keywords": [
+    "itwin",
+    "viewer",
+    "extensions",
+    "rules",
+    "scenarios"
+  ],
+  "author": "Segesp",
+  "license": "MIT"
+}

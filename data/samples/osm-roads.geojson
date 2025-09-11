@@ -1,0 +1,60 @@
+{
+  "type": "FeatureCollection",
+  "name": "buenos_aires_roads",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "id": 1,
+        "name": "Avenida 9 de Julio",
+        "type": "arterial",
+        "lanes": 8,
+        "speed_limit": 60,
+        "width": 40
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [-58.3816, -34.6037],
+          [-58.3816, -34.6180]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": 2,
+        "name": "Avenida Corrientes",
+        "type": "arterial",
+        "lanes": 6,
+        "speed_limit": 50,
+        "width": 30
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [-58.4200, -34.6037],
+          [-58.3400, -34.6037]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": 3,
+        "name": "Avenida Santa Fe",
+        "type": "arterial",
+        "lanes": 6,
+        "speed_limit": 50,
+        "width": 28
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [-58.4500, -34.5950],
+          [-58.3500, -34.5950]
+        ]
+      }
+    }
+  ]
+}
