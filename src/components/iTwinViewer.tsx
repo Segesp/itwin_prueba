@@ -23,6 +23,7 @@ import { Button, ProgressLinear, Alert } from '@itwin/itwinui-react';
 import { CesiumCuratedContentService } from '../services/CesiumCuratedContentService';
 import { ChangeTrackingService, ChangeComparison, ViewDecoration } from '../services/ChangeTrackingService';
 import { CGAOperatorsService, CGARule } from '../services/CGAOperatorsService';
+import ABScenarioComparison from './ABScenarioComparison';
 
 // Configuration interfaces
 interface iTwinViewerConfig {
@@ -67,12 +68,13 @@ const iTwinViewer: React.FC = () => {
   const [tilesLoading, setTilesLoading] = useState(false);
   const [tilesStatus, setTilesStatus] = useState<string>('Not loaded');
 
-  // A/B Scenario state
+  // A/B Scenario state with visual evidence tracking
   const [scenarioComparison, setScenarioComparison] = useState<ScenarioComparison>({
     scenarioA: '',
     scenarioB: '',
     isActive: false
   });
+  const [showABPanel, setShowABPanel] = useState(false);
 
   // Services
   const cesiumService = CesiumCuratedContentService.getInstance();
@@ -405,25 +407,15 @@ const iTwinViewer: React.FC = () => {
             Apply Urban Rules
           </Button>
           
-          {/* A/B Scenario Controls */}
-          {!scenarioComparison.isActive ? (
-            <Button 
-              size="small" 
-              onClick={() => startScenarioComparison('scenario-a', 'scenario-b')}
-              disabled={!isViewerReady}
-            >
-              Start A/B Comparison
-            </Button>
-          ) : (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <span style={{ fontSize: '0.8rem', color: '#0073e6' }}>
-                A/B Active: {scenarioComparison.comparison?.summary.total || 0} changes
-              </span>
-              <Button size="small" onClick={stopScenarioComparison}>
-                Stop A/B
-              </Button>
-            </div>
-          )}
+          {/* A/B Scenario Controls with Visual Evidence */}
+          <Button 
+            size="small" 
+            styleType={showABPanel ? "cta" : "default"}
+            onClick={() => setShowABPanel(!showABPanel)}
+            disabled={!isViewerReady}
+          >
+            {showABPanel ? 'Hide A/B Panel' : 'Show A/B Evidence'}
+          </Button>
           
           <Button size="small" onClick={handleSignOut}>
             Sign Out
@@ -431,15 +423,32 @@ const iTwinViewer: React.FC = () => {
         </div>
       </div>
 
-      {/* Main Viewer */}
-      <div style={{ flex: 1 }}>
-        <Viewer
-          iTwinId={viewerConfig.iTwinId}
-          iModelId={viewerConfig.iModelId}
-          authClient={authClient}
-          onIModelConnected={handleViewerReady}
-          enablePerformanceMonitors={true}
-        />
+      {/* Main Viewer with Side Panel */}
+      <div style={{ flex: 1, display: 'flex' }}>
+        {/* iTwin Viewer */}
+        <div style={{ flex: showABPanel ? 2 : 1 }}>
+          <Viewer
+            iTwinId={viewerConfig.iTwinId}
+            iModelId={viewerConfig.iModelId}
+            authClient={authClient}
+            onIModelConnected={handleViewerReady}
+            enablePerformanceMonitors={true}
+          />
+        </div>
+
+        {/* A/B Scenario Comparison Panel with Visual Evidence */}
+        {showABPanel && (
+          <div style={{ 
+            width: '480px', 
+            borderLeft: '1px solid #dee2e6',
+            backgroundColor: '#f8f9fa'
+          }}>
+            <ABScenarioComparison 
+              iModelConnection={iModel}
+              viewManager={null} // In production, this would be the actual ViewManager
+            />
+          </div>
+        )}
       </div>
 
       {/* A/B Comparison Status */}
