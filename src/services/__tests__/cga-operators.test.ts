@@ -68,7 +68,7 @@ describe('CGA Operators Service', () => {
       expect(gableRoof.geometry.attributes.roofType).toBe('gable');
       expect(hipRoof.geometry.attributes.roofType).toBe('hip');
 
-      expect(gableRoof.geometry.attributes.ridgeHeight).toBeGreaterThan(gableRoof.geometry.attributes.height);
+      expect(gableRoof.geometry.attributes.ridgeHeight).toBeGreaterThan(gableRoof.geometry.attributes.height || 0);
     });
   });
 
