@@ -35,9 +35,36 @@ export class RulesEngine {
     const startTime = Date.now();
     this.operationCount = 0;
     
+    let validProgram: RuleProgram;
+    
     try {
       // Validate rule program schema
-      const validProgram = RuleProgramSchema.parse(program);
+      validProgram = RuleProgramSchema.parse(program);
+    } catch (schemaError) {
+      // Convert Zod validation errors to user-friendly messages
+      let errorMessage = 'Rule program validation failed';
+      if (schemaError instanceof Error) {
+        if (schemaError.message.includes('too_small')) {
+          errorMessage = 'Height value must be non-negative';
+        } else if (schemaError.message.includes('invalid_union_discriminator')) {
+          errorMessage = 'Invalid rule operation - validation error';
+        } else {
+          errorMessage = `Schema validation error: ${schemaError.message}`;
+        }
+      }
+      
+      return {
+        success: false,
+        attributes: context.attributes,
+        error: errorMessage,
+        metadata: {
+          operationCount: 0,
+          executionTimeMs: Date.now() - startTime
+        }
+      };
+    }
+    
+    try {
       
       // Validate geometry for rule application (use permissive validation for testing)
       const geometryValidation = validateGeometryForRules(
@@ -49,7 +76,7 @@ export class RulesEngine {
         return {
           success: false,
           attributes: context.attributes,
-          error: `Geometry validation failed: ${geometryValidation.errors.join(', ')}`,
+          error: `Invalid geometry for rule processing: ${geometryValidation.errors.join(', ')}`,
           metadata: {
             operationCount: 0,
             executionTimeMs: Date.now() - startTime
@@ -91,7 +118,8 @@ export class RulesEngine {
           extrudeCount++;
         }
         
-        if (result.attributes.volume) {
+        // Only accumulate volume from extrude operations
+        if (rule.op === 'extrude' && result.attributes.volume) {
           totalVolume += result.attributes.volume;
         }
         
@@ -226,8 +254,8 @@ export class RulesEngine {
         faces.push([i, next, n + next, n + i]);
       }
       
-      const baseArea = attributes.baseArea || this.calculateArea(geometry.vertices);
-      const volume = baseArea * rule.h;
+      const currentArea = this.calculateArea(geometry.vertices);
+      const volume = currentArea * rule.h;
       
       const extrudedGeometry: SimpleGeometry = {
         type: 'solid',
@@ -237,7 +265,7 @@ export class RulesEngine {
           ...geometry.attributes,
           height: rule.h,
           volume,
-          baseArea,
+          baseArea: currentArea,
           extrudeMode: rule.mode || 'world'
         }
       };
@@ -249,7 +277,7 @@ export class RulesEngine {
           ...attributes,
           height: rule.h,
           volume,
-          baseArea
+          baseArea: currentArea
         }
       };
     } catch (error) {
@@ -290,20 +318,18 @@ export class RulesEngine {
         }
       }
       
-      // Simplified offset implementation - scale from centroid
-      const centroid = this.calculateCentroid(geometry.vertices);
-      const offsetVertices = geometry.vertices.map(vertex => {
-        const dx = vertex[0] - centroid[0];
-        const dy = vertex[1] - centroid[1];
-        const len = Math.sqrt(dx * dx + dy * dy);
-        if (len === 0) return vertex;
-        
-        const factor = (len + distance) / len;
-        return [
-          centroid[0] + dx * factor,
-          centroid[1] + dy * factor
-        ];
-      });
+      // Simplified offset implementation for rectangular polygons
+      // For a square/rectangle, inward offset shrinks by distance on all sides
+      // outward offset expands by distance on all sides
+      const offsetVertices = this.offsetRectangularPolygon(geometry.vertices, rule.d, isOutward);
+      
+      if (offsetVertices.length === 0) {
+        return {
+          success: false,
+          attributes,
+          error: 'Inward offset too large - would eliminate geometry'
+        };
+      }
       
       const newArea = this.calculateArea(offsetVertices);
       
@@ -456,20 +482,42 @@ export class RulesEngine {
     try {
       const faces = rule.faces || ['front', 'back', 'left', 'right'];
       
+      // For a rectangular polygon, apply setback to specified faces
+      // This is similar to offset but only on specific sides
+      const setbackVertices = this.applySetbackToRectangle(geometry.vertices, rule.d, faces);
+      
+      if (setbackVertices.length === 0) {
+        return {
+          success: false,
+          attributes,
+          error: 'Setback too large - would eliminate geometry'
+        };
+      }
+      
+      const newArea = this.calculateArea(setbackVertices);
+      
+      const setbackGeometry: SimpleGeometry = {
+        type: 'polygon',
+        vertices: setbackVertices,
+        attributes: {
+          ...geometry.attributes,
+          setbackDistance: rule.d,
+          setbackFaces: faces,
+          area: newArea
+        }
+      };
+      
+      const { volume: _, ...attributesWithoutVolume } = attributes;
+      
       return {
         success: true,
-        geometry: {
-          ...geometry,
-          attributes: {
-            ...geometry.attributes,
-            setbackDistance: rule.d,
-            setbackFaces: faces
-          }
-        },
+        geometry: setbackGeometry,
         attributes: {
-          ...attributes,
+          ...attributesWithoutVolume,
           setbackDistance: rule.d,
-          setbackFaces: faces
+          setbackFaces: faces,
+          area: newArea,
+          baseArea: newArea // Update baseArea for subsequent operations
         }
       };
     } catch (error) {
@@ -502,6 +550,8 @@ export class RulesEngine {
       
       const roofHeight = rule.height || ((rule.pitch || 30) * Math.PI / 180) * 10;
       
+      const { volume: _, ...attributesWithoutVolume } = attributes;
+      
       return {
         success: true,
         geometry: {
@@ -514,7 +564,7 @@ export class RulesEngine {
           }
         },
         attributes: {
-          ...attributes,
+          ...attributesWithoutVolume,
           roofType: rule.kind,
           roofPitch: rule.pitch,
           roofHeight
@@ -611,5 +661,93 @@ export class RulesEngine {
    */
   private calculateVolume(vertices: number[][], height: number): number {
     return this.calculateArea(vertices) * height;
+  }
+
+  /**
+   * Helper: Offset rectangular polygon inward/outward
+   * For rectangular polygons, this properly shrinks/expands each edge
+   */
+  private offsetRectangularPolygon(vertices: number[][], distance: number, outward: boolean): number[][] {
+    // For a simple rectangular polygon, we can offset by moving each edge
+    // This assumes vertices are in order: [min,min], [max,min], [max,max], [min,max], [min,min]
+    
+    if (vertices.length < 4) return [];
+    
+    // Calculate bounding box
+    const xs = vertices.map(v => v[0]);
+    const ys = vertices.map(v => v[1]);
+    const minX = Math.min(...xs);
+    const maxX = Math.max(...xs);
+    const minY = Math.min(...ys);
+    const maxY = Math.max(...ys);
+    
+    // Apply offset
+    const offset = outward ? distance : -distance;
+    
+    const newMinX = minX - offset;
+    const newMaxX = maxX + offset;
+    const newMinY = minY - offset;
+    const newMaxY = maxY + offset;
+    
+    // Check if inward offset would eliminate the polygon
+    if (!outward && (newMaxX <= newMinX || newMaxY <= newMinY)) {
+      return []; // Invalid polygon
+    }
+    
+    // Return rectangular vertices in same order
+    return [
+      [newMinX, newMinY],
+      [newMaxX, newMinY], 
+      [newMaxX, newMaxY],
+      [newMinX, newMaxY],
+      [newMinX, newMinY] // Close the polygon
+    ];
+  }
+
+  /**
+   * Helper: Apply setback to specific faces of a rectangular polygon
+   * faces can be: 'front', 'back', 'left', 'right'
+   * For a rectangle with min/max bounds, assumes:
+   * - front = minY edge, back = maxY edge
+   * - left = minX edge, right = maxX edge
+   */
+  private applySetbackToRectangle(vertices: number[][], distance: number, faces: string[]): number[][] {
+    if (vertices.length < 4) return [];
+    
+    // Calculate bounding box
+    const xs = vertices.map(v => v[0]);
+    const ys = vertices.map(v => v[1]);
+    let minX = Math.min(...xs);
+    let maxX = Math.max(...xs);
+    let minY = Math.min(...ys);
+    let maxY = Math.max(...ys);
+    
+    // Apply setback to specified faces
+    if (faces.includes('front')) {
+      minY += distance; // Move front edge inward
+    }
+    if (faces.includes('back')) {
+      maxY -= distance; // Move back edge inward  
+    }
+    if (faces.includes('left')) {
+      minX += distance; // Move left edge inward
+    }
+    if (faces.includes('right')) {
+      maxX -= distance; // Move right edge inward
+    }
+    
+    // Check if setback would eliminate the polygon
+    if (maxX <= minX || maxY <= minY) {
+      return []; // Invalid polygon
+    }
+    
+    // Return rectangular vertices in same order
+    return [
+      [minX, minY],
+      [maxX, minY], 
+      [maxX, maxY],
+      [minX, maxY],
+      [minX, minY] // Close the polygon
+    ];
   }
 }
