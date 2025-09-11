@@ -9,6 +9,7 @@ import Home from './components/Home/Home';
 import UrbanViewer from './components/UrbanViewer/UrbanViewer';
 import CitizenDashboard from './components/CitizenDashboard/CitizenDashboard';
 import AdminDashboard from './components/AdminDashboard/AdminDashboard';
+import UrbanKPIDashboard from './components/UrbanKPIDashboard/UrbanKPIDashboard';
 import ScenarioSimulator from './components/ScenarioSimulator/ScenarioSimulator';
 import RealTimeData from './components/RealTimeData/RealTimeData';
 import SettingsPanel from './components/Settings/SettingsPanel';
@@ -177,6 +178,7 @@ const App: React.FC = () => {
           <Route path="/viewer" element={<UrbanViewer />} />
           <Route path="/citizen" element={<CitizenDashboard />} />
           <Route path="/admin" element={<AdminDashboard />} />
+          <Route path="/kpi" element={<UrbanKPIDashboard />} />
           <Route path="/simulator" element={<ScenarioSimulator />} />
           <Route path="/data" element={<RealTimeData />} />
           <Route path="/settings" element={<SettingsPanel />} />
