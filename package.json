@@ -54,6 +54,8 @@
     "zustand": "^4.4.7"
   },
   "devDependencies": {
+    "@itwin/core-backend": "^5.1.7",
+    "@itwin/core-bentley": "^5.1.7",
     "@testing-library/jest-dom": "^6.1.5",
     "@testing-library/react": "^13.4.0",
     "@types/jest": "^30.0.0",
