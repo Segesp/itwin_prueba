@@ -1,0 +1,69 @@
+{
+  "type": "FeatureCollection",
+  "name": "buenos_aires_parcels",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "id": 1,
+        "area": 2500,
+        "zoning": "residential",
+        "height_limit": 30,
+        "far_max": 2.5,
+        "district": "Palermo"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-58.4314, -34.5722],
+          [-58.4310, -34.5722],
+          [-58.4310, -34.5725],
+          [-58.4314, -34.5725],
+          [-58.4314, -34.5722]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": 2,
+        "area": 1800,
+        "zoning": "commercial",
+        "height_limit": 45,
+        "far_max": 3.0,
+        "district": "Puerto Madero"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-58.3631, -34.6112],
+          [-58.3627, -34.6112],
+          [-58.3627, -34.6115],
+          [-58.3631, -34.6115],
+          [-58.3631, -34.6112]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": 3,
+        "area": 3200,
+        "zoning": "mixed",
+        "height_limit": 60,
+        "far_max": 4.0,
+        "district": "San Telmo"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-58.3731, -34.6214],
+          [-58.3726, -34.6214],
+          [-58.3726, -34.6218],
+          [-58.3731, -34.6218],
+          [-58.3731, -34.6214]
+        ]]
+      }
+    }
+  ]
+}

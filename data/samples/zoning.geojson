@@ -1,0 +1,66 @@
+{
+  "type": "FeatureCollection",
+  "name": "buenos_aires_zoning",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "zone_type": "R4",
+        "description": "High Density Residential",
+        "max_height": 45,
+        "max_far": 3.5,
+        "min_setback": 3
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-58.4500, -34.5700],
+          [-58.4300, -34.5700],
+          [-58.4300, -34.5800],
+          [-58.4500, -34.5800],
+          [-58.4500, -34.5700]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "zone_type": "C3",
+        "description": "Commercial Center",
+        "max_height": 60,
+        "max_far": 5.0,
+        "min_setback": 0
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-58.3800, -34.6000],
+          [-58.3600, -34.6000],
+          [-58.3600, -34.6100],
+          [-58.3800, -34.6100],
+          [-58.3800, -34.6000]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "zone_type": "M1",
+        "description": "Mixed Use Low",
+        "max_height": 35,
+        "max_far": 2.8,
+        "min_setback": 2
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-58.3750, -34.6200],
+          [-58.3700, -34.6200],
+          [-58.3700, -34.6250],
+          [-58.3750, -34.6250],
+          [-58.3750, -34.6200]
+        ]]
+      }
+    }
+  ]
+}

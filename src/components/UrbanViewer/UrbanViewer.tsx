@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import {
   Box,
   Paper,
@@ -17,6 +17,9 @@ import {
   Switch,
   FormControlLabel,
   Alert,
+  Drawer,
+  Divider,
+  CircularProgress
 } from '@mui/material';
 import {
   ZoomIn as ZoomInIcon,
@@ -27,21 +30,82 @@ import {
   Fullscreen as FullscreenIcon,
   LocationOn as LocationIcon,
   Public as PublicIcon,
+  Code as CodeIcon,
+  CompareArrows as CompareIcon,
+  Assessment as AssessmentIcon
 } from '@mui/icons-material';
 
-// iTwin.js imports (we'll implement a simplified version for now)
-// import { IModelConnection, ViewState } from '@itwin/core-frontend';
+// Import iTwin.js components (will be implemented as the deps install)
+// Note: These imports will work once we install the iTwin packages
+let Viewer: any;
+let IModelApp: any;
 
-const UrbanViewer: React.FC = () => {
+// Import our custom packages (temporarily using local imports until packages are built)
+// import { RuleEditor } from '../../packages/viewer-extensions/src/RuleEditor';
+// import { RuleProgram } from '../../packages/rules-cga-lite/src/types';
+
+// Temporary placeholder interfaces until packages are ready
+interface RuleProgram {
+  name: string;
+  description?: string;
+  attrs?: Record<string, any>;
+  rules: any[];
+}
+
+interface RuleEditorProps {
+  onRuleApply?: (rule: RuleProgram) => Promise<void>;
+  onRuleValidate?: (rule: RuleProgram) => Promise<boolean>;
+  selectedGeometry?: any;
+  disabled?: boolean;
+}
+
+// Temporary Rule Editor component placeholder
+const RuleEditor: React.FC<RuleEditorProps> = ({ selectedGeometry, disabled }) => {
+  return (
+    <Paper sx={{ height: '100%', p: 2 }}>
+      <Typography variant="h6" gutterBottom>
+        CGA-lite Rule Editor
+      </Typography>
+      <Alert severity="info" sx={{ mb: 2 }}>
+        Rule engine integration in progress. This will provide CityEngine-like procedural rule capabilities.
+      </Alert>
+      {selectedGeometry && (
+        <Alert severity="success" sx={{ fontSize: '0.8rem' }}>
+          Geometry selected! Rule application will be available once the engine is complete.
+        </Alert>
+      )}
+      {disabled && (
+        <Alert severity="warning" sx={{ fontSize: '0.8rem' }}>
+          Editor disabled while viewer is loading.
+        </Alert>
+      )}
+    </Paper>
+  );
+};
+
+interface UrbanViewerProps {}
+
+const UrbanViewer: React.FC<UrbanViewerProps> = () => {
+  // State management
   const viewerRef = useRef<HTMLDivElement>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [viewerInitialized, setViewerInitialized] = useState(false);
+  const [iTwinInitialized, setITwinInitialized] = useState(false);
   const [selectedLayer, setSelectedLayer] = useState('all');
   const [showBuildings, setShowBuildings] = useState(true);
   const [showTraffic, setShowTraffic] = useState(true);
   const [showSensors, setShowSensors] = useState(false);
   const [opacity, setOpacity] = useState(100);
   const [currentView, setCurrentView] = useState('overview');
+  const [selectedGeometry, setSelectedGeometry] = useState<any>(null);
+  
+  // Panel states
+  const [ruleEditorOpen, setRuleEditorOpen] = useState(false);
+  const [scenarioCompareOpen, setScenarioCompareOpen] = useState(false);
+  const [kpiPanelOpen, setKpiPanelOpen] = useState(false);
+
+  // Error state
+  const [error, setError] = useState<string | null>(null);
 
   // Buenos Aires coordinates and areas
   const buenosAiresCenter = { lat: -34.6118, lng: -58.3960 };
@@ -62,13 +126,14 @@ const UrbanViewer: React.FC = () => {
     { id: 'utilities', name: 'Servicios Públicos', color: '#f44336' },
   ];
 
+  // Initialize viewer
   useEffect(() => {
     initializeViewer();
     
     return () => {
-      // Cleanup viewer
-      if (viewerRef.current) {
-        // In a real implementation, dispose of iTwin.js resources
+      // Cleanup iTwin.js resources
+      if (iTwinInitialized && IModelApp) {
+        IModelApp.shutdown();
       }
     };
   }, []);
@@ -76,20 +141,81 @@ const UrbanViewer: React.FC = () => {
   const initializeViewer = async () => {
     try {
       setIsLoading(true);
+      setError(null);
       
-      // Simulate viewer initialization
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // Check if iTwin.js environment variables are configured
+      const iTwinId = typeof process !== 'undefined' && process.env?.IMJS_ITWIN_ID;
+      const iModelId = typeof process !== 'undefined' && process.env?.IMJS_IMODEL_ID;
+      const clientId = typeof process !== 'undefined' && process.env?.IMJS_AUTH_CLIENT_CLIENT_ID;
       
-      if (viewerRef.current) {
-        // Create a simulated 3D viewer
-        createSimulated3DViewer();
-        setViewerInitialized(true);
+      if (!iTwinId || !iModelId || !clientId) {
+        // Fall back to simulated viewer if iTwin.js is not configured
+        console.warn('iTwin.js environment not configured, using simulated viewer');
+        await initializeSimulatedViewer();
+        return;
+      }
+
+      // Try to initialize iTwin.js viewer
+      try {
+        await initializeITwinViewer();
+      } catch (iTwinError) {
+        console.warn('Failed to initialize iTwin.js viewer, falling back to simulated viewer:', iTwinError);
+        setError('iTwin.js viewer unavailable - using simulated environment');
+        await initializeSimulatedViewer();
       }
       
     } catch (error) {
       console.error('Error initializing viewer:', error);
+      setError(`Error initializing viewer: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const initializeITwinViewer = async () => {
+    // This will be implemented when iTwin.js packages are available
+    // For now, we'll use try-catch to handle missing dependencies gracefully
+    try {
+      // Check if we're in a browser environment and dependencies exist
+      if (typeof window === 'undefined') {
+        throw new Error('Server-side rendering not supported for iTwin.js');
+      }
+
+      // Try to dynamically import iTwin.js modules (using variables to prevent webpack from bundling)
+      const iTwinPackage = '@itwin/web-viewer-react';
+      const corePackage = '@itwin/core-frontend';
+      
+      const [iTwinModule, coreModule] = await Promise.all([
+        import(/* webpackIgnore: true */ iTwinPackage).catch(() => null),
+        import(/* webpackIgnore: true */ corePackage).catch(() => null)
+      ]);
+      
+      if (!iTwinModule || !coreModule) {
+        throw new Error('iTwin.js packages not available');
+      }
+
+      Viewer = iTwinModule.Viewer;
+      IModelApp = coreModule.IModelApp;
+      
+      // Initialize iTwin.js application
+      await IModelApp.startup();
+      setITwinInitialized(true);
+      setViewerInitialized(true);
+      
+      console.log('iTwin.js viewer initialized successfully');
+      
+    } catch (error) {
+      throw new Error(`Failed to initialize iTwin.js: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  };
+
+  const initializeSimulatedViewer = async () => {
+    // Simulate initialization delay
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    
+    if (viewerRef.current) {
+      createSimulated3DViewer();
+      setViewerInitialized(true);
     }
   };
 
@@ -99,7 +225,7 @@ const UrbanViewer: React.FC = () => {
     // Clear any existing content
     viewerRef.current.innerHTML = '';
 
-    // Create a simulated 3D environment
+    // Create a simulated 3D environment with enhanced urban features
     const canvas = document.createElement('canvas');
     canvas.width = viewerRef.current.offsetWidth;
     canvas.height = viewerRef.current.offsetHeight;
@@ -109,13 +235,12 @@ const UrbanViewer: React.FC = () => {
     
     const ctx = canvas.getContext('2d');
     if (ctx) {
-      // Draw a simplified city view
-      drawSimplifiedCityView(ctx, canvas.width, canvas.height);
+      drawEnhancedCityView(ctx, canvas.width, canvas.height);
     }
     
     viewerRef.current.appendChild(canvas);
 
-    // Add click interaction
+    // Add click interaction for geometry selection
     canvas.addEventListener('click', handleCanvasClick);
     
     // Resize handler
@@ -124,7 +249,7 @@ const UrbanViewer: React.FC = () => {
         canvas.width = viewerRef.current.offsetWidth;
         canvas.height = viewerRef.current.offsetHeight;
         if (ctx) {
-          drawSimplifiedCityView(ctx, canvas.width, canvas.height);
+          drawEnhancedCityView(ctx, canvas.width, canvas.height);
         }
       }
     });
@@ -132,113 +257,164 @@ const UrbanViewer: React.FC = () => {
     resizeObserver.observe(viewerRef.current);
   };
 
-  const drawSimplifiedCityView = (ctx: CanvasRenderingContext2D, width: number, height: number) => {
+  const drawEnhancedCityView = (ctx: CanvasRenderingContext2D, width: number, height: number) => {
     // Clear canvas
     ctx.clearRect(0, 0, width, height);
     
-    // Draw sky
+    // Draw sky with gradient
     const skyGradient = ctx.createLinearGradient(0, 0, 0, height * 0.4);
     skyGradient.addColorStop(0, '#87CEEB');
-    skyGradient.addColorStop(1, '#98FB98');
+    skyGradient.addColorStop(1, '#B0E0E6');
     ctx.fillStyle = skyGradient;
     ctx.fillRect(0, 0, width, height * 0.4);
     
-    // Draw ground
-    ctx.fillStyle = '#90EE90';
+    // Draw ground with urban texture
+    const groundGradient = ctx.createLinearGradient(0, height * 0.4, 0, height);
+    groundGradient.addColorStop(0, '#90EE90');
+    groundGradient.addColorStop(1, '#808080');
+    ctx.fillStyle = groundGradient;
     ctx.fillRect(0, height * 0.4, width, height * 0.6);
     
-    // Draw buildings (representing Buenos Aires skyline)
-    const buildings = [
-      { x: width * 0.1, width: width * 0.08, height: height * 0.3, color: '#4A4A4A' },
-      { x: width * 0.2, width: width * 0.06, height: height * 0.25, color: '#5A5A5A' },
-      { x: width * 0.28, width: width * 0.1, height: height * 0.35, color: '#6A6A6A' },
-      { x: width * 0.4, width: width * 0.07, height: height * 0.28, color: '#4A4A4A' },
-      { x: width * 0.5, width: width * 0.09, height: height * 0.32, color: '#5A5A5A' },
-      { x: width * 0.62, width: width * 0.08, height: height * 0.27, color: '#6A6A6A' },
-      { x: width * 0.72, width: width * 0.11, height: height * 0.38, color: '#4A4A4A' },
-      { x: width * 0.85, width: width * 0.08, height: height * 0.29, color: '#5A5A5A' },
+    // Draw city blocks and buildings
+    const cityBlocks = [
+      { x: width * 0.05, y: height * 0.45, width: width * 0.15, height: height * 0.4, buildings: 6 },
+      { x: width * 0.25, y: height * 0.5, width: width * 0.2, height: height * 0.35, buildings: 8 },
+      { x: width * 0.5, y: height * 0.48, width: width * 0.18, height: height * 0.37, buildings: 7 },
+      { x: width * 0.75, y: height * 0.52, width: width * 0.2, height: height * 0.33, buildings: 5 },
     ];
 
-    buildings.forEach(building => {
+    cityBlocks.forEach((block, blockIndex) => {
       if (showBuildings) {
-        // Building shadow
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
-        ctx.fillRect(
-          building.x + 5,
-          height * 0.4 - building.height + 5,
-          building.width,
-          building.height
-        );
+        // Draw block base
+        ctx.fillStyle = '#D3D3D3';
+        ctx.fillRect(block.x, block.y, block.width, block.height);
         
-        // Building
-        ctx.fillStyle = building.color;
-        ctx.fillRect(
-          building.x,
-          height * 0.4 - building.height,
-          building.width,
-          building.height
-        );
-        
-        // Windows
-        ctx.fillStyle = '#FFFF99';
-        for (let i = 0; i < building.height / 15; i++) {
-          for (let j = 0; j < building.width / 10; j++) {
-            if (Math.random() > 0.3) { // Some windows are lit
-              ctx.fillRect(
-                building.x + j * 10 + 2,
-                height * 0.4 - building.height + i * 15 + 2,
-                6,
-                8
-              );
+        // Draw individual buildings within block
+        const buildingWidth = block.width / block.buildings;
+        for (let i = 0; i < block.buildings; i++) {
+          const buildingHeight = (0.6 + Math.random() * 0.4) * block.height;
+          const buildingX = block.x + i * buildingWidth + 2;
+          const buildingY = block.y + block.height - buildingHeight;
+          
+          // Building shadow
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+          ctx.fillRect(buildingX + 3, buildingY + 3, buildingWidth - 4, buildingHeight);
+          
+          // Building main structure
+          const buildingColors = ['#4A4A4A', '#5A5A5A', '#6A6A6A', '#7A7A7A'];
+          ctx.fillStyle = buildingColors[Math.floor(Math.random() * buildingColors.length)];
+          ctx.fillRect(buildingX, buildingY, buildingWidth - 4, buildingHeight);
+          
+          // Windows grid
+          ctx.fillStyle = Math.random() > 0.3 ? '#FFFF99' : '#333333';
+          const windowCols = Math.floor((buildingWidth - 4) / 8);
+          const windowRows = Math.floor(buildingHeight / 12);
+          
+          for (let row = 0; row < windowRows; row++) {
+            for (let col = 0; col < windowCols; col++) {
+              if (Math.random() > 0.4) { // Some windows are lit/visible
+                ctx.fillRect(
+                  buildingX + col * 8 + 2,
+                  buildingY + row * 12 + 2,
+                  5,
+                  8
+                );
+              }
             }
           }
         }
       }
     });
 
-    // Draw traffic (if enabled)
+    // Draw transportation network
     if (showTraffic) {
-      // Roads
+      // Main streets
       ctx.fillStyle = '#404040';
-      ctx.fillRect(0, height * 0.5, width, 8);
-      ctx.fillRect(0, height * 0.6, width, 8);
+      ctx.fillRect(0, height * 0.6, width, 12);
+      ctx.fillRect(0, height * 0.75, width, 12);
+      ctx.fillRect(width * 0.3, height * 0.4, 12, height * 0.5);
+      ctx.fillRect(width * 0.7, height * 0.4, 12, height * 0.5);
       
-      // Vehicles
-      const vehicles = 8;
+      // Street markings
+      ctx.strokeStyle = '#FFFF00';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([10, 10]);
+      ctx.beginPath();
+      ctx.moveTo(0, height * 0.606);
+      ctx.lineTo(width, height * 0.606);
+      ctx.moveTo(0, height * 0.756);
+      ctx.lineTo(width, height * 0.756);
+      ctx.stroke();
+      
+      // Vehicles with animation effect
+      const vehicles = 12;
       for (let i = 0; i < vehicles; i++) {
-        const x = (width / vehicles) * i + Math.random() * 50;
-        ctx.fillStyle = ['#FF0000', '#0000FF', '#00FF00', '#FFFF00'][Math.floor(Math.random() * 4)];
-        ctx.fillRect(x, height * 0.5 - 3, 15, 6);
+        const x = (width / vehicles) * i + (Date.now() / 50) % 100;
+        const colors = ['#FF0000', '#0000FF', '#00FF00', '#FFFF00', '#FF00FF', '#00FFFF'];
+        ctx.fillStyle = colors[i % colors.length];
+        ctx.fillRect(x % width, height * 0.6 - 4, 20, 8);
       }
     }
 
-    // Draw sensors (if enabled)
+    // Draw IoT sensors network
     if (showSensors) {
-      const sensors = 12;
+      const sensors = 15;
       for (let i = 0; i < sensors; i++) {
-        const x = Math.random() * width;
-        const y = height * 0.4 + Math.random() * (height * 0.2);
+        const x = (width / sensors) * i + Math.random() * 30;
+        const y = height * 0.45 + Math.random() * (height * 0.15);
         
+        // Sensor node
         ctx.fillStyle = '#FF6B6B';
         ctx.beginPath();
-        ctx.arc(x, y, 4, 0, 2 * Math.PI);
+        ctx.arc(x, y, 5, 0, 2 * Math.PI);
         ctx.fill();
         
-        // Sensor signal
-        ctx.strokeStyle = '#FF6B6B';
+        // Sensor signal (animated)
+        const pulseRadius = 10 + (Math.sin(Date.now() / 500 + i) * 5);
+        ctx.strokeStyle = 'rgba(255, 107, 107, 0.6)';
         ctx.lineWidth = 2;
         ctx.beginPath();
-        ctx.arc(x, y, 8, 0, 2 * Math.PI);
+        ctx.arc(x, y, pulseRadius, 0, 2 * Math.PI);
         ctx.stroke();
+        
+        // Data connection lines
+        if (i > 0) {
+          const prevX = (width / sensors) * (i - 1) + Math.random() * 30;
+          const prevY = height * 0.45 + Math.random() * (height * 0.15);
+          ctx.strokeStyle = 'rgba(255, 107, 107, 0.3)';
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(x, y);
+          ctx.lineTo(prevX, prevY);
+          ctx.stroke();
+        }
       }
     }
 
-    // Draw labels
+    // Draw UI overlays
     ctx.fillStyle = '#333';
-    ctx.font = '16px Arial';
-    ctx.fillText('Buenos Aires - Gemelo Digital Urbano', 20, 30);
-    ctx.font = '12px Arial';
-    ctx.fillText(`Vista: ${viewPresets.find(v => v.id === currentView)?.name || 'Personalizada'}`, 20, 50);
+    ctx.font = 'bold 18px Arial';
+    ctx.fillText('Buenos Aires - Digital Twin Platform', 20, 35);
+    
+    ctx.font = '14px Arial';
+    ctx.fillText(`View: ${viewPresets.find(v => v.id === currentView)?.name || 'Custom'}`, 20, 55);
+    
+    if (error) {
+      ctx.fillStyle = '#FF6B6B';
+      ctx.font = '12px Arial';
+      ctx.fillText(error, 20, 75);
+    }
+    
+    // Draw selection indicator if geometry is selected
+    if (selectedGeometry) {
+      ctx.strokeStyle = '#00FF00';
+      ctx.lineWidth = 3;
+      ctx.strokeRect(selectedGeometry.x - 5, selectedGeometry.y - 5, selectedGeometry.width + 10, selectedGeometry.height + 10);
+      
+      ctx.fillStyle = '#00FF00';
+      ctx.font = '12px Arial';
+      ctx.fillText('Selected for Rules', selectedGeometry.x, selectedGeometry.y - 10);
+    }
   };
 
   const handleCanvasClick = (event: MouseEvent) => {
@@ -246,42 +422,68 @@ const UrbanViewer: React.FC = () => {
     const x = event.clientX - rect.left;
     const y = event.clientY - rect.top;
     
-    console.log(`Clicked at coordinates: ${x}, ${y}`);
-    // In a real implementation, this would handle 3D picking and object selection
-  };
-
-  const handleZoomIn = () => {
-    console.log('Zoom in');
-    // Implement zoom functionality
-  };
-
-  const handleZoomOut = () => {
-    console.log('Zoom out');
-    // Implement zoom functionality
-  };
-
-  const handleCenter = () => {
-    console.log('Center view');
-    setCurrentView('overview');
-    // Redraw with overview settings
+    // Simulate geometry selection
+    setSelectedGeometry({
+      x: x - 25,
+      y: y - 25,
+      width: 50,
+      height: 50,
+      type: 'building_footprint'
+    });
+    
+    console.log(`Selected geometry at coordinates: ${x}, ${y}`);
+    
+    // Redraw to show selection
     if (viewerRef.current) {
       createSimulated3DViewer();
     }
+  };
+
+  // Rule application handler
+  const handleRuleApply = useCallback(async (rule: RuleProgram) => {
+    if (!selectedGeometry) {
+      throw new Error('No geometry selected');
+    }
+    
+    console.log('Applying rule:', rule.name, 'to geometry:', selectedGeometry);
+    
+    // Simulate rule application delay
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
+    // In a real implementation, this would:
+    // 1. Convert selected geometry to iTwin format
+    // 2. Execute rule using RulesEngine
+    // 3. Insert resulting geometry into iModel
+    // 4. Refresh the viewer
+    
+    console.log('Rule applied successfully');
+  }, [selectedGeometry]);
+
+  // Rule validation handler
+  const handleRuleValidate = useCallback(async (rule: RuleProgram) => {
+    console.log('Validating rule:', rule.name);
+    
+    // Simulate validation
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
+    return rule.rules.length > 0;
+  }, []);
+
+  // Navigation handlers
+  const handleZoomIn = () => console.log('Zoom in');
+  const handleZoomOut = () => console.log('Zoom out');
+  const handleCenter = () => {
+    setCurrentView('overview');
+    if (viewerRef.current) createSimulated3DViewer();
   };
 
   const handleViewChange = (viewId: string) => {
     setCurrentView(viewId);
-    console.log(`Changing view to: ${viewId}`);
-    // In a real implementation, this would animate the camera to the new position
-    if (viewerRef.current) {
-      createSimulated3DViewer();
-    }
+    if (viewerRef.current) createSimulated3DViewer();
   };
 
   const handleLayerChange = (layerId: string) => {
     setSelectedLayer(layerId);
-    console.log(`Changing layer to: ${layerId}`);
-    // Update layer visibility
   };
 
   const handleFullscreen = () => {
@@ -294,26 +496,77 @@ const UrbanViewer: React.FC = () => {
     }
   };
 
+  // Animation loop for dynamic elements
+  useEffect(() => {
+    let animationFrame: number;
+    
+    const animate = () => {
+      if (viewerRef.current && viewerInitialized) {
+        createSimulated3DViewer();
+      }
+      animationFrame = requestAnimationFrame(animate);
+    };
+    
+    if (showTraffic || showSensors) {
+      animationFrame = requestAnimationFrame(animate);
+    }
+    
+    return () => {
+      if (animationFrame) {
+        cancelAnimationFrame(animationFrame);
+      }
+    };
+  }, [showTraffic, showSensors, viewerInitialized, selectedGeometry]);
+
   return (
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       {/* Header */}
       <Toolbar sx={{ backgroundColor: 'background.paper', borderBottom: 1, borderColor: 'divider' }}>
         <PublicIcon sx={{ mr: 2, color: 'primary.main' }} />
         <Typography variant="h6" sx={{ flexGrow: 1 }}>
-          Visor 3D - Buenos Aires
+          iTwin Urban Digital Twin - Buenos Aires
         </Typography>
         
+        {/* Extension Panel Buttons */}
+        <Box sx={{ display: 'flex', gap: 1, mr: 2 }}>
+          <Button
+            variant={ruleEditorOpen ? 'contained' : 'outlined'}
+            size="small"
+            startIcon={<CodeIcon />}
+            onClick={() => setRuleEditorOpen(!ruleEditorOpen)}
+          >
+            Rules
+          </Button>
+          <Button
+            variant={scenarioCompareOpen ? 'contained' : 'outlined'}
+            size="small"
+            startIcon={<CompareIcon />}
+            onClick={() => setScenarioCompareOpen(!scenarioCompareOpen)}
+          >
+            Scenarios
+          </Button>
+          <Button
+            variant={kpiPanelOpen ? 'contained' : 'outlined'}
+            size="small"
+            startIcon={<AssessmentIcon />}
+            onClick={() => setKpiPanelOpen(!kpiPanelOpen)}
+          >
+            KPIs
+          </Button>
+        </Box>
+        
+        {/* Viewer Controls */}
         <Box sx={{ display: 'flex', gap: 1 }}>
-          <IconButton onClick={handleZoomIn} title="Acercar">
+          <IconButton onClick={handleZoomIn} title="Zoom In">
             <ZoomInIcon />
           </IconButton>
-          <IconButton onClick={handleZoomOut} title="Alejar">
+          <IconButton onClick={handleZoomOut} title="Zoom Out">
             <ZoomOutIcon />
           </IconButton>
-          <IconButton onClick={handleCenter} title="Centrar">
+          <IconButton onClick={handleCenter} title="Center">
             <CenterIcon />
           </IconButton>
-          <IconButton onClick={handleFullscreen} title="Pantalla completa">
+          <IconButton onClick={handleFullscreen} title="Fullscreen">
             <FullscreenIcon />
           </IconButton>
         </Box>
@@ -334,24 +587,25 @@ const UrbanViewer: React.FC = () => {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                backgroundColor: 'rgba(255, 255, 255, 0.95)',
                 zIndex: 1000,
               }}
             >
               <Card>
-                <CardContent sx={{ textAlign: 'center' }}>
+                <CardContent sx={{ textAlign: 'center', p: 3 }}>
+                  <CircularProgress sx={{ mb: 2 }} />
                   <Typography variant="h6" sx={{ mb: 2 }}>
-                    Inicializando Visor 3D
+                    Initializing iTwin Urban Digital Twin
                   </Typography>
                   <Typography variant="body2" color="text.secondary">
-                    Cargando modelo de Buenos Aires...
+                    Loading Buenos Aires 3D model and urban data...
                   </Typography>
                 </CardContent>
               </Card>
             </Box>
           )}
 
-          {/* 3D Viewer Container */}
+          {/* iTwin Viewer Container */}
           <Box
             ref={viewerRef}
             sx={{
@@ -366,7 +620,7 @@ const UrbanViewer: React.FC = () => {
           >
             {!viewerInitialized && !isLoading && (
               <Typography variant="h6" color="text.secondary">
-                Visor 3D no inicializado
+                iTwin Viewer not initialized
               </Typography>
             )}
           </Box>
@@ -387,11 +641,92 @@ const UrbanViewer: React.FC = () => {
                 <Typography variant="body2">
                   Buenos Aires, Argentina
                 </Typography>
-                <Chip label="En vivo" size="small" color="success" />
+                <Chip 
+                  label={iTwinInitialized ? 'iTwin Live' : 'Simulated'} 
+                  size="small" 
+                  color={iTwinInitialized ? 'success' : 'warning'} 
+                />
+                {selectedGeometry && (
+                  <Chip 
+                    label="Geometry Selected" 
+                    size="small" 
+                    color="primary" 
+                  />
+                )}
               </Box>
             </Paper>
           )}
         </Box>
+
+        {/* Rule Editor Panel */}
+        <Drawer
+          anchor="right"
+          open={ruleEditorOpen}
+          onClose={() => setRuleEditorOpen(false)}
+          variant="persistent"
+          sx={{
+            '& .MuiDrawer-paper': {
+              width: 480,
+              position: 'relative',
+              height: '100%',
+            },
+          }}
+        >
+          <RuleEditor
+            onRuleApply={handleRuleApply}
+            onRuleValidate={handleRuleValidate}
+            selectedGeometry={selectedGeometry}
+            disabled={isLoading}
+          />
+        </Drawer>
+
+        {/* Scenario Compare Panel */}
+        <Drawer
+          anchor="right"
+          open={scenarioCompareOpen}
+          onClose={() => setScenarioCompareOpen(false)}
+          variant="persistent"
+          sx={{
+            '& .MuiDrawer-paper': {
+              width: 400,
+              position: 'relative',
+              height: '100%',
+            },
+          }}
+        >
+          <Paper sx={{ height: '100%', p: 2 }}>
+            <Typography variant="h6" gutterBottom>
+              Scenario Comparison
+            </Typography>
+            <Alert severity="info">
+              Scenario management coming soon. This will allow A/B comparison of different urban development scenarios.
+            </Alert>
+          </Paper>
+        </Drawer>
+
+        {/* KPI Panel */}
+        <Drawer
+          anchor="right"
+          open={kpiPanelOpen}
+          onClose={() => setKpiPanelOpen(false)}
+          variant="persistent"
+          sx={{
+            '& .MuiDrawer-paper': {
+              width: 350,
+              position: 'relative',
+              height: '100%',
+            },
+          }}
+        >
+          <Paper sx={{ height: '100%', p: 2 }}>
+            <Typography variant="h6" gutterBottom>
+              Urban KPIs & Metrics
+            </Typography>
+            <Alert severity="info">
+              ECSQL-based KPI dashboard coming soon. This will show FAR, building heights, land use metrics, etc.
+            </Alert>
+          </Paper>
+        </Drawer>
 
         {/* Controls Panel */}
         <Paper
@@ -407,7 +742,7 @@ const UrbanViewer: React.FC = () => {
           <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider' }}>
             <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
               <LayersIcon sx={{ mr: 1, color: 'primary.main' }} />
-              <Typography variant="h6">Controles</Typography>
+              <Typography variant="h6">Controls</Typography>
             </Box>
           </Box>
 
@@ -415,7 +750,7 @@ const UrbanViewer: React.FC = () => {
           <Box sx={{ p: 2, flexGrow: 1, overflow: 'auto' }}>
             {/* View Presets */}
             <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
-              Vistas Predefinidas
+              Predefined Views
             </Typography>
             <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 3 }}>
               {viewPresets.map(preset => (
@@ -433,13 +768,13 @@ const UrbanViewer: React.FC = () => {
 
             {/* Layer Selection */}
             <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
-              Capas
+              Layers
             </Typography>
             <FormControl fullWidth size="small" sx={{ mb: 2 }}>
-              <InputLabel>Seleccionar Capa</InputLabel>
+              <InputLabel>Select Layer</InputLabel>
               <Select
                 value={selectedLayer}
-                label="Seleccionar Capa"
+                label="Select Layer"
                 onChange={(e) => handleLayerChange(e.target.value)}
               >
                 {layers.map(layer => (
@@ -462,7 +797,7 @@ const UrbanViewer: React.FC = () => {
 
             {/* Visibility Controls */}
             <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
-              Visibilidad
+              Visibility
             </Typography>
             <FormControlLabel
               control={
@@ -474,7 +809,7 @@ const UrbanViewer: React.FC = () => {
                   }}
                 />
               }
-              label="Edificios"
+              label="Buildings"
               sx={{ mb: 1 }}
             />
             <FormControlLabel
@@ -487,7 +822,7 @@ const UrbanViewer: React.FC = () => {
                   }}
                 />
               }
-              label="Tráfico"
+              label="Traffic"
               sx={{ mb: 1 }}
             />
             <FormControlLabel
@@ -500,13 +835,13 @@ const UrbanViewer: React.FC = () => {
                   }}
                 />
               }
-              label="Sensores IoT"
+              label="IoT Sensors"
               sx={{ mb: 2 }}
             />
 
             {/* Opacity Control */}
             <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
-              Transparencia: {opacity}%
+              Transparency: {opacity}%
             </Typography>
             <Slider
               value={opacity}
@@ -518,10 +853,15 @@ const UrbanViewer: React.FC = () => {
             />
 
             {/* Information */}
-            <Alert severity="info" sx={{ fontSize: '0.8rem' }}>
-              Haga clic en el visor para interactuar con elementos urbanos.
-              Use los controles para personalizar la visualización.
+            <Alert severity="info" sx={{ fontSize: '0.8rem', mb: 2 }}>
+              Click on buildings in the viewer to select geometry for rule application.
             </Alert>
+            
+            {selectedGeometry && (
+              <Alert severity="success" sx={{ fontSize: '0.8rem' }}>
+                Geometry selected! Open the Rules panel to apply procedural rules.
+              </Alert>
+            )}
           </Box>
         </Paper>
       </Box>
