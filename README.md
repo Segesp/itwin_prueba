@@ -1,6 +1,32 @@
 # iTwin.js Documentation Repository
 
-Este repositorio contiene toda la documentación de la librería iTwin.js de JavaScript, organizada de manera integral y completa.
+Este repositorio contiene toda la documentación de la librería iTwin.js de JavaScript, organizada de manera integral y completa, **además de una plataforma web funcional** para gemelos digitales urbanos.
+
+## 🌐 Plataforma Web - Gemelo Digital Urbano
+
+### 🚀 **[Ver Plataforma Web Completa](./PLATFORM.md)**
+
+**¡Nueva!** Plataforma web completa desarrollada para el gemelo digital urbano de Buenos Aires:
+
+- **🏙️ Visor 3D interactivo** con navegación inmersiva por Buenos Aires
+- **📊 Dashboard en tiempo real** con datos de sensores IoT urbanos  
+- **👥 Portal ciudadano** para reportes y participación urbana
+- **🎮 Simulador de escenarios** (tráfico, emergencias, desarrollo urbano)
+- **🏛️ Panel administrativo** para gestión urbana integral
+- **📱 Diseño responsive** optimizado para móviles y desktop
+
+#### Inicio Rápido de la Plataforma
+```bash
+# Instalar dependencias
+npm install
+
+# Iniciar servidor de desarrollo
+npm start
+# ó
+./run.sh dev
+
+# Abrir en navegador: http://localhost:3000
+```
 
 ## 📚 Documentación Completa
 
@@ -10,6 +36,7 @@ Toda la documentación está organizada en carpetas por categorías para facilit
 
 ## Estructura Principal
 
+- **🌐 [Plataforma Web](./PLATFORM.md)** - Aplicación web completa del gemelo digital urbano
 - **[🚀 Getting Started](./docs/getting-started/)** - Primeros pasos con iTwin.js
 - **🏙️ [Gemelos Digitales Urbanos](./docs/gemelos-digitales-urbanos/)** - Desarrollo de gemelos digitales para ciudades
 - **🏗️ [Architecture](./docs/architecture/)** - Documentación de arquitectura del sistema  

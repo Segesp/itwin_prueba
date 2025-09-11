@@ -1,0 +1,364 @@
+/* App-specific styles */
+
+.App {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.app-header {
+  background: linear-gradient(90deg, #1976d2 0%, #1565c0 100%);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  z-index: 1200;
+}
+
+.app-sidebar {
+  background: #ffffff;
+  border-right: 1px solid #e0e0e0;
+  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.1);
+}
+
+.app-main-content {
+  flex-grow: 1;
+  overflow: hidden;
+  background: #f8f9fa;
+}
+
+/* Page transitions */
+.page-enter {
+  opacity: 0;
+  transform: translateX(30px);
+}
+
+.page-enter-active {
+  opacity: 1;
+  transform: translateX(0);
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.page-exit {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.page-exit-active {
+  opacity: 0;
+  transform: translateX(-30px);
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+/* Buenos Aires themed gradients */
+.ba-gradient-primary {
+  background: linear-gradient(135deg, #1976d2 0%, #1565c0 100%);
+}
+
+.ba-gradient-secondary {
+  background: linear-gradient(135deg, #dc004e 0%, #c51162 100%);
+}
+
+.ba-gradient-accent {
+  background: linear-gradient(135deg, #ffc107 0%, #ff8f00 100%);
+}
+
+.ba-gradient-success {
+  background: linear-gradient(135deg, #4caf50 0%, #388e3c 100%);
+}
+
+/* Card styles */
+.urban-card {
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  transition: all 0.3s ease;
+  border: 1px solid rgba(0, 0, 0, 0.04);
+}
+
+.urban-card:hover {
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  transform: translateY(-2px);
+}
+
+.urban-card-header {
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  border-bottom: 1px solid #dee2e6;
+}
+
+/* Button styles */
+.urban-button-primary {
+  background: linear-gradient(135deg, #1976d2 0%, #1565c0 100%);
+  border: none;
+  border-radius: 8px;
+  color: white;
+  font-weight: 500;
+  text-transform: none;
+  box-shadow: 0 2px 8px rgba(25, 118, 210, 0.3);
+  transition: all 0.2s ease;
+}
+
+.urban-button-primary:hover {
+  background: linear-gradient(135deg, #1565c0 0%, #0d47a1 100%);
+  box-shadow: 0 4px 16px rgba(25, 118, 210, 0.4);
+  transform: translateY(-1px);
+}
+
+/* Status indicators */
+.status-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 8px;
+}
+
+.status-online {
+  background: #4caf50;
+  box-shadow: 0 0 8px rgba(76, 175, 80, 0.6);
+}
+
+.status-offline {
+  background: #f44336;
+}
+
+.status-warning {
+  background: #ff9800;
+  animation: pulse 2s infinite;
+}
+
+/* Simulation specific styles */
+.simulation-container {
+  border: 2px solid #e3f2fd;
+  border-radius: 8px;
+  background: #fafafa;
+  position: relative;
+  overflow: hidden;
+}
+
+.simulation-running {
+  border-color: #1976d2;
+  background: #f3f8ff;
+}
+
+.simulation-running::after {
+  content: 'EN EJECUCIÓN';
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: #1976d2;
+  color: white;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  font-weight: 500;
+  animation: pulse 2s infinite;
+}
+
+/* Data visualization */
+.metric-card {
+  background: white;
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  border-left: 4px solid;
+  transition: all 0.3s ease;
+}
+
+.metric-card.positive {
+  border-left-color: #4caf50;
+}
+
+.metric-card.negative {
+  border-left-color: #f44336;
+}
+
+.metric-card.warning {
+  border-left-color: #ff9800;
+}
+
+.metric-card.info {
+  border-left-color: #2196f3;
+}
+
+.metric-value {
+  font-size: 2.5rem;
+  font-weight: 300;
+  line-height: 1;
+  margin-bottom: 8px;
+}
+
+.metric-label {
+  font-size: 0.9rem;
+  color: #666;
+  margin-bottom: 4px;
+}
+
+.metric-change {
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.metric-change.positive {
+  color: #4caf50;
+}
+
+.metric-change.negative {
+  color: #f44336;
+}
+
+/* Urban viewer enhancements */
+.viewer-3d {
+  width: 100%;
+  height: 100%;
+  border: none;
+  outline: none;
+  background: linear-gradient(to bottom, #87CEEB 0%, #87CEEB 40%, #90EE90 40%, #90EE90 100%);
+}
+
+.viewer-controls {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(8px);
+  border-radius: 8px;
+  padding: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+}
+
+.viewer-info-panel {
+  position: absolute;
+  bottom: 16px;
+  left: 16px;
+  right: 16px;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(8px);
+  border-radius: 8px;
+  padding: 16px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+}
+
+/* Real-time data styles */
+.sensor-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+  padding: 16px;
+}
+
+.sensor-card {
+  background: white;
+  border-radius: 8px;
+  padding: 16px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  border-left: 4px solid;
+}
+
+.sensor-card.temperature { border-left-color: #ff9800; }
+.sensor-card.humidity { border-left-color: #2196f3; }
+.sensor-card.air-quality { border-left-color: #4caf50; }
+.sensor-card.noise { border-left-color: #9c27b0; }
+.sensor-card.traffic { border-left-color: #f44336; }
+
+/* Animation classes */
+.fade-in {
+  animation: fadeIn 0.5s ease-out;
+}
+
+.slide-up {
+  animation: slideUp 0.4s ease-out;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.bounce-in {
+  animation: bounceIn 0.6s ease-out;
+}
+
+@keyframes bounceIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.3);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.05);
+  }
+  70% {
+    transform: scale(0.9);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Error boundary styles */
+.error-boundary {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 40px;
+  text-align: center;
+  background: #f8f9fa;
+}
+
+.error-boundary h2 {
+  color: #f44336;
+  margin-bottom: 16px;
+}
+
+.error-boundary p {
+  color: #666;
+  margin-bottom: 24px;
+  max-width: 500px;
+}
+
+/* Loading states */
+.loading-skeleton {
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: loading 1.5s infinite;
+  border-radius: 4px;
+}
+
+@keyframes loading {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* Responsive breakpoints utilities */
+.show-xs { display: block; }
+.show-sm { display: none; }
+.show-md { display: none; }
+.show-lg { display: none; }
+.show-xl { display: none; }
+
+@media (min-width: 600px) {
+  .show-xs { display: none; }
+  .show-sm { display: block; }
+}
+
+@media (min-width: 960px) {
+  .show-sm { display: none; }
+  .show-md { display: block; }
+}
+
+@media (min-width: 1280px) {
+  .show-md { display: none; }
+  .show-lg { display: block; }
+}
+
+@media (min-width: 1920px) {
+  .show-lg { display: none; }
+  .show-xl { display: block; }
+}
