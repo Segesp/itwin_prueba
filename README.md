@@ -11,6 +11,7 @@ Toda la documentación está organizada en carpetas por categorías para facilit
 ## Estructura Principal
 
 - **[🚀 Getting Started](./docs/getting-started/)** - Primeros pasos con iTwin.js
+- **🏙️ [Gemelos Digitales Urbanos](./docs/gemelos-digitales-urbanos/)** - Desarrollo de gemelos digitales para ciudades
 - **🏗️ [Architecture](./docs/architecture/)** - Documentación de arquitectura del sistema  
 - **⚙️ [Core Framework](./docs/core-framework/)** - Framework principal de iTwin.js
 - **📡 [API Reference](./docs/api-reference/)** - Documentación completa de APIs
@@ -27,15 +28,17 @@ Toda la documentación está organizada en carpetas por categorías para facilit
 
 Para comenzar:
 1. **Nuevos usuarios**: Ir a [Getting Started](./docs/getting-started/)
-2. **Desarrolladores**: Ver [Core Framework](./docs/core-framework/) y [API Reference](./docs/api-reference/)
-3. **Diseñadores UI**: Explorar [UI Components](./docs/ui-components/)
-4. **Ejemplos prácticos**: Revisar [Examples & Samples](./docs/examples-samples/)
+2. **Gemelos Digitales Urbanos**: Ver [Desarrollo Urbano](./docs/gemelos-digitales-urbanos/)
+3. **Desarrolladores**: Ver [Core Framework](./docs/core-framework/) y [API Reference](./docs/api-reference/)
+4. **Diseñadores UI**: Explorar [UI Components](./docs/ui-components/)
+5. **Ejemplos prácticos**: Revisar [Examples & Samples](./docs/examples-samples/)
 
 ## Contenido Completo
 
 Este repositorio contiene **toda** la documentación de iTwin.js incluyendo:
 
-- ✅ **60+ carpetas organizadas** por funcionalidad
+- ✅ **70+ carpetas organizadas** por funcionalidad
+- ✅ **Gemelos Digitales Urbanos** con guías completas para desarrollo de ciudades inteligentes
 - ✅ **Documentación del Core Framework** completa
 - ✅ **Referencias de API** TypeScript, REST y GraphQL
 - ✅ **Componentes UI** con ejemplos y guías
