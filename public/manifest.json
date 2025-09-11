@@ -1,0 +1,97 @@
+{
+  "short_name": "Gemelo Digital BA",
+  "name": "Gemelo Digital Urbano - Buenos Aires",
+  "description": "Plataforma web para el gemelo digital urbano de Buenos Aires. Visualización 3D, datos en tiempo real y participación ciudadana.",
+  "icons": [
+    {
+      "src": "favicon.ico",
+      "sizes": "64x64 32x32 24x24 16x16",
+      "type": "image/x-icon"
+    },
+    {
+      "src": "icon-192x192.png",
+      "type": "image/png",
+      "sizes": "192x192",
+      "purpose": "maskable any"
+    },
+    {
+      "src": "icon-512x512.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "maskable any"
+    }
+  ],
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "theme_color": "#1976d2",
+  "background_color": "#ffffff",
+  "orientation": "landscape-primary",
+  "categories": [
+    "education",
+    "government",
+    "utilities",
+    "lifestyle"
+  ],
+  "lang": "es-AR",
+  "dir": "ltr",
+  "screenshots": [
+    {
+      "src": "screenshot-desktop.png",
+      "type": "image/png",
+      "sizes": "1280x720",
+      "form_factor": "wide"
+    },
+    {
+      "src": "screenshot-mobile.png", 
+      "type": "image/png",
+      "sizes": "390x844",
+      "form_factor": "narrow"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Visor 3D",
+      "short_name": "Visor",
+      "description": "Abrir visualización 3D de Buenos Aires",
+      "url": "/viewer",
+      "icons": [
+        {
+          "src": "shortcut-viewer.png",
+          "sizes": "96x96"
+        }
+      ]
+    },
+    {
+      "name": "Portal Ciudadano",
+      "short_name": "Ciudadano",
+      "description": "Acceso rápido al portal ciudadano",
+      "url": "/citizen",
+      "icons": [
+        {
+          "src": "shortcut-citizen.png",
+          "sizes": "96x96"
+        }
+      ]
+    },
+    {
+      "name": "Datos en Tiempo Real",
+      "short_name": "Datos",
+      "description": "Ver datos de sensores en tiempo real",
+      "url": "/data",
+      "icons": [
+        {
+          "src": "shortcut-data.png",
+          "sizes": "96x96"
+        }
+      ]
+    }
+  ],
+  "related_applications": [
+    {
+      "platform": "web",
+      "url": "https://gemelo-digital-baires.web.app/"
+    }
+  ],
+  "prefer_related_applications": false
+}
