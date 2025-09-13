@@ -222,10 +222,30 @@ export interface ApiResponse<T = any> {
 
 export interface ViewerConfig {
   iModelId?: string;
+  iTwinId?: string; // iTwin Platform project ID
   contextId?: string;
   mapLayersUrl?: string;
   realityDataUrl?: string;
   viewDefinitionId?: string;
+  // Chancay-specific configuration
+  crs: {
+    horizontalCRSId: "EPSG:32718" | "EPSG:5387"; // UTM Zone 18S variants
+    reprojectionRequired?: boolean; // true if converting from EPSG:5387 to 32718
+  };
+  initialCamera: {
+    // Chancay Port reference point: ≈ -11.593, -77.277
+    lat: -11.593;
+    lng: -77.277;
+    elevation: 200; // meters - good overview height for port
+    pitch: -45; // degrees - angled view
+    yaw: 0; // degrees - facing north
+  };
+  // 3D Tiles integration for context
+  cesiumContent: {
+    enableWorldTerrain: boolean;
+    enableOSMBuildings: boolean;
+    tilesetUrls?: string[];
+  };
   enableTerrain: boolean;
   enableShadows: boolean;
   enableAmbientOcclusion: boolean;
@@ -238,11 +258,12 @@ export interface ViewerConfig {
   };
 }
 
-// Buenos Aires specific types
-export interface BarrioData {
+// Chancay-specific types (Peru) and Buenos Aires compatibility
+export interface DistrictData {
   id: string;
   name: string;
-  comuna: number;
+  province?: string; // For Peru
+  comuna?: number; // For Buenos Aires compatibility
   population: number;
   area: number; // km²
   density: number; // per km²
@@ -260,13 +281,39 @@ export interface BarrioData {
     schools: number;
     policeDepartments: number;
     fireStations: number;
-    metroStations: number;
+    portFacilities?: number; // For Chancay
+    metroStations?: number; // For Buenos Aires
     busStops: number;
   };
   environment: {
     greenSpaceRatio: number;
     airQualityIndex: number;
     noiseLevel: number;
+  };
+}
+
+// CRS Configuration for Chancay Port, Peru
+export interface ChancayCRSConfig {
+  // Primary CRS: WGS84 / UTM Zone 18S (EPSG:32718)
+  primaryCRS: {
+    epsg: 32718;
+    name: "WGS 84 / UTM zone 18S";
+    description: "Main operational CRS for Chancay Digital Twin";
+  };
+  // Alternative: Peru96 / UTM Zone 18S (EPSG:5387) - if source data uses this
+  alternateCRS?: {
+    epsg: 5387;
+    name: "Peru96 / UTM zone 18S";
+    description: "Alternative CRS for legacy Peru96 data reprojection";
+  };
+  // Reference point: Chancay Port coordinates
+  referencePoint: {
+    // ≈ -11.593, -77.277 (WGS84 lat/lng for initial camera positioning)
+    lat: -11.593;
+    lng: -77.277;
+    elevation: 5; // meters above sea level
+    utm_x: 282500; // Approximate UTM 18S coordinates
+    utm_y: 8717000;
   };
 }
 

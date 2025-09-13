@@ -1,4 +1,4 @@
-import { BarrioData, IoTSensor, TrafficData, EnvironmentalData } from '../types/common';
+import { DistrictData, IoTSensor, TrafficData, EnvironmentalData } from '../types/common';
 
 export class BuenosAiresDataService {
   private static instance: BuenosAiresDataService;
@@ -17,7 +17,7 @@ export class BuenosAiresDataService {
   };
 
   // Buenos Aires neighborhoods (barrios) with real coordinates
-  private readonly BARRIOS: BarrioData[] = [
+  private readonly BARRIOS: DistrictData[] = [
     {
       id: 'puerto_madero',
       name: 'Puerto Madero',
@@ -104,11 +104,11 @@ export class BuenosAiresDataService {
     return BuenosAiresDataService.instance;
   }
 
-  public getBarrios(): BarrioData[] {
+  public getBarrios(): DistrictData[] {
     return this.BARRIOS;
   }
 
-  public getBarrio(id: string): BarrioData | undefined {
+  public getBarrio(id: string): DistrictData | undefined {
     return this.BARRIOS.find(barrio => barrio.id === id);
   }
 
@@ -428,8 +428,8 @@ export class BuenosAiresDataService {
     );
   }
 
-  public findNearestBarrio(coordinates: { lat: number; lng: number }): BarrioData | null {
-    let nearest: BarrioData | null = null;
+  public findNearestBarrio(coordinates: { lat: number; lng: number }): DistrictData | null {
+    let nearest: DistrictData | null = null;
     let minDistance = Infinity;
 
     this.BARRIOS.forEach(barrio => {

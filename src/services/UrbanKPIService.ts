@@ -94,27 +94,36 @@ export class UrbanKPIService {
   /**
    * Calculate overall urban metrics for the entire project
    * 
-   * Production ECSQL Query using proper BIS classes:
+   * Production ECSQL Query using proper BIS classes (NO JsonProperties):
    * ```sql
    * SELECT 
    *   COUNT(*) as buildingCount,
-   *   AVG(e.UserLabel) as avgHeight,
+   *   AVG(bb.High.Z - bb.Low.Z) as avgHeight,
    *   MAX(bb.High.Z - bb.Low.Z) as maxHeight,
-   *   SUM(g.Volume) as totalVolume,
-   *   SUM(CASE WHEN g.Surface IS NOT NULL THEN g.Surface ELSE 0 END) as totalSurface
-   * FROM BisCore.PhysicalElement e
-   * JOIN BisCore.Category c ON e.Category.Id = c.ECInstanceId  
-   * JOIN BisCore.GeometricElement3d g ON e.ECInstanceId = g.ECInstanceId
-   * LEFT JOIN BisCore.ElementAspect bb ON e.ECInstanceId = bb.Element.Id
-   * WHERE c.CodeValue = 'Building' OR e.classFullName = 'Generic:GenericPhysicalObject'
-   * AND e.Parent IS NOT NULL
+   *   SUM(CASE WHEN g.Volume IS NOT NULL THEN g.Volume ELSE 0 END) as totalVolume,
+   *   SUM(CASE WHEN geom.FootprintArea IS NOT NULL THEN geom.FootprintArea 
+   *       ELSE (bb.High.X - bb.Low.X) * (bb.High.Y - bb.Low.Y) END) as totalFootprint
+   * FROM BisCore.GeometricElement3d g
+   * JOIN BisCore.Category c ON g.Category.Id = c.ECInstanceId
+   * LEFT JOIN BisCore.ElementAspect geom ON g.ECInstanceId = geom.Element.Id
+   * LEFT JOIN BisCore.SpatialLocationElement spatial ON spatial.ECInstanceId = g.Parent.Id
+   * WHERE g.BBoxHigh IS NOT NULL AND g.BBoxLow IS NOT NULL
+   *   AND (c.CodeValue = 'Building' OR g.ClassFullName LIKE '%Building%' 
+   *        OR g.ClassFullName = 'Generic:GenericPhysicalObject')
+   *   AND (bb.High.Z - bb.Low.Z) > 0
    * ```
    * 
-   * Alternative for buildings with proper Building class:
+   * Alternative using BuildingSpatial schema for proper building hierarchy:
    * ```sql
-   * SELECT COUNT(*), AVG(b.Height), SUM(b.FootprintArea), SUM(b.FloorArea)
-   * FROM bis.Building b
+   * SELECT 
+   *   COUNT(b.ECInstanceId) as buildingCount,
+   *   AVG(b.Height) as avgHeight,
+   *   SUM(b.FootprintArea) as totalFootprint,
+   *   SUM(b.GrossFloorArea) as totalFloorArea
+   * FROM BuildingSpatial.Building b
    * WHERE b.Model.Id = ?
+   *   AND b.Height IS NOT NULL 
+   *   AND b.Height > 0
    * ```
    */
   public async calculateOverallMetrics(): Promise<UrbanMetrics> {
@@ -140,18 +149,20 @@ export class UrbanKPIService {
    * Production ECSQL Query using proper BIS classes and spatial grouping:
    * ```sql
    * SELECT 
-   *   spatial.BlockId as blockId,
+   *   spatial.UserLabel as blockId,
    *   COUNT(*) as buildingCount,
-   *   AVG(bb.High.Z - bb.Low.Z) as avgHeight,
-   *   SUM(g.Volume) as blockVolume,
-   *   AVG(g.Surface) as avgFootprint
-   * FROM BisCore.PhysicalElement e
-   * JOIN BisCore.Category c ON e.Category.Id = c.ECInstanceId
-   * JOIN BisCore.GeometricElement3d g ON e.ECInstanceId = g.ECInstanceId
-   * LEFT JOIN BisCore.ElementAspect bb ON e.ECInstanceId = bb.Element.Id
-   * JOIN BisCore.SpatialLocationElement spatial ON spatial.ECInstanceId = e.Parent.Id
-   * WHERE c.CodeValue = 'Building' OR e.classFullName = 'Generic:GenericPhysicalObject'
-   * GROUP BY spatial.BlockId
+   *   AVG(g.BBoxHigh.Z - g.BBoxLow.Z) as avgHeight,
+   *   SUM(CASE WHEN g.Volume IS NOT NULL THEN g.Volume ELSE 0 END) as blockVolume,
+   *   AVG(CASE WHEN geom.FootprintArea IS NOT NULL THEN geom.FootprintArea 
+   *       ELSE (g.BBoxHigh.X - g.BBoxLow.X) * (g.BBoxHigh.Y - g.BBoxLow.Y) END) as avgFootprint
+   * FROM BisCore.GeometricElement3d g
+   * JOIN BisCore.Category c ON g.Category.Id = c.ECInstanceId
+   * LEFT JOIN BisCore.ElementAspect geom ON g.ECInstanceId = geom.Element.Id
+   * JOIN BisCore.SpatialLocationElement spatial ON spatial.ECInstanceId = g.Parent.Id
+   * WHERE g.BBoxHigh IS NOT NULL AND g.BBoxLow IS NOT NULL
+   *   AND (c.CodeValue = 'Building' OR g.ClassFullName LIKE '%Building%' 
+   *        OR g.ClassFullName = 'Generic:GenericPhysicalObject')
+   * GROUP BY spatial.UserLabel
    * ```
    * 
    * For iModels with proper urban schema:
@@ -185,27 +196,32 @@ export class UrbanKPIService {
   private async queryBuildingDataFromiModel(): Promise<BuildingData[]> {
     if (this.hasRealConnection) {
       try {
-        // Production ECSQL using proper BIS classes
+        // Production ECSQL using proper BIS classes (NO JsonProperties)
         const query = `
           SELECT 
-            e.ECInstanceId as elementId,
-            COALESCE(bb.High.Z - bb.Low.Z, 25.0) as height,
-            COALESCE(g.Surface, 100.0) as footprintArea,
-            COALESCE(g.Volume / NULLIF(bb.High.Z - bb.Low.Z, 0), g.Surface * 3.5) as floorArea,
-            COALESCE(g.Volume, g.Surface * (bb.High.Z - bb.Low.Z)) as volume,
+            g.ECInstanceId as elementId,
+            COALESCE(g.BBoxHigh.Z - g.BBoxLow.Z, 25.0) as height,
+            COALESCE(geom.FootprintArea, (g.BBoxHigh.X - g.BBoxLow.X) * (g.BBoxHigh.Y - g.BBoxLow.Y)) as footprintArea,
+            COALESCE(g.Volume, geom.FootprintArea * (g.BBoxHigh.Z - g.BBoxLow.Z)) as volume,
+            CASE 
+              WHEN g.Volume > 0 AND (g.BBoxHigh.Z - g.BBoxLow.Z) > 0 
+              THEN g.Volume / (g.BBoxHigh.Z - g.BBoxLow.Z) * 3.5
+              ELSE geom.FootprintArea * 3.5 
+            END as floorArea,
             spatial.UserLabel as blockId,
             lot.UserLabel as lotId,
             c.CodeValue as category
-          FROM BisCore.PhysicalElement e
-          JOIN BisCore.Category c ON e.Category.Id = c.ECInstanceId
-          JOIN BisCore.GeometricElement3d g ON e.ECInstanceId = g.ECInstanceId
-          LEFT JOIN BisCore.ElementAspect bb ON e.ECInstanceId = bb.Element.Id
-          LEFT JOIN BisCore.SpatialLocationElement spatial ON spatial.ECInstanceId = e.Parent.Id
+          FROM BisCore.GeometricElement3d g
+          JOIN BisCore.Category c ON g.Category.Id = c.ECInstanceId
+          LEFT JOIN BisCore.ElementAspect geom ON g.ECInstanceId = geom.Element.Id
+          LEFT JOIN BisCore.SpatialLocationElement spatial ON spatial.ECInstanceId = g.Parent.Id
           LEFT JOIN BisCore.SpatialLocationElement lot ON lot.ECInstanceId = spatial.Parent.Id
-          WHERE (c.CodeValue = 'Building' OR e.classFullName = 'Generic:GenericPhysicalObject')
-            AND e.Parent IS NOT NULL
-            AND g.Volume IS NOT NULL
-          ORDER BY spatial.UserLabel, e.ECInstanceId
+          WHERE g.BBoxHigh IS NOT NULL AND g.BBoxLow IS NOT NULL
+            AND (c.CodeValue = 'Building' OR g.ClassFullName LIKE '%Building%' 
+                 OR g.ClassFullName = 'Generic:GenericPhysicalObject')
+            AND (g.BBoxHigh.Z - g.BBoxLow.Z) > 0
+            AND spatial.ECInstanceId IS NOT NULL
+          ORDER BY spatial.UserLabel, g.ECInstanceId
         `;
         
         // In production, this would use:
@@ -254,25 +270,28 @@ export class UrbanKPIService {
           SELECT 
             lot.UserLabel as lotId,
             block.UserLabel as blockId,
-            COALESCE(lot_geom.Surface, 400.0) as siteArea,
-            COALESCE(green.GreenSpaceArea, lot_geom.Surface * 0.2) as greenSpaceArea,
-            COALESCE(built.BuiltArea, lot_geom.Surface * 0.4) as buildingFootprintArea,
+            COALESCE(geom.SiteArea, (lot_bb.High.X - lot_bb.Low.X) * (lot_bb.High.Y - lot_bb.Low.Y)) as siteArea,
+            COALESCE(green.GreenSpaceArea, geom.SiteArea * 0.2) as greenSpaceArea,
+            COALESCE(built.BuiltArea, geom.SiteArea * 0.4) as buildingFootprintArea,
             'Lot' as category
           FROM BisCore.SpatialLocationElement lot
           JOIN BisCore.SpatialLocationElement block ON block.ECInstanceId = lot.Parent.Id
+          LEFT JOIN BisCore.ElementAspect geom ON lot.ECInstanceId = geom.Element.Id
           LEFT JOIN BisCore.GeometricElement3d lot_geom ON lot.ECInstanceId = lot_geom.ECInstanceId
           LEFT JOIN (
-            SELECT Parent.Id as LotId, SUM(Surface) as GreenSpaceArea 
-            FROM BisCore.PhysicalElement 
-            JOIN BisCore.Category ON Category.Id = PhysicalElement.Category.Id
-            WHERE Category.CodeValue = 'Landscape' 
+            SELECT Parent.Id as LotId, SUM(geom_aspect.FootprintArea) as GreenSpaceArea 
+            FROM BisCore.PhysicalElement pe
+            JOIN BisCore.Category cat ON cat.Id = pe.Category.Id
+            LEFT JOIN BisCore.ElementAspect geom_aspect ON pe.ECInstanceId = geom_aspect.Element.Id
+            WHERE cat.CodeValue = 'Landscape' 
             GROUP BY Parent.Id
           ) green ON green.LotId = lot.ECInstanceId
           LEFT JOIN (
-            SELECT Parent.Id as LotId, SUM(Surface) as BuiltArea
-            FROM BisCore.PhysicalElement 
-            JOIN BisCore.Category ON Category.Id = PhysicalElement.Category.Id
-            WHERE Category.CodeValue = 'Building'
+            SELECT Parent.Id as LotId, SUM(geom_aspect.FootprintArea) as BuiltArea
+            FROM BisCore.PhysicalElement pe
+            JOIN BisCore.Category cat ON cat.Id = pe.Category.Id
+            LEFT JOIN BisCore.ElementAspect geom_aspect ON pe.ECInstanceId = geom_aspect.Element.Id
+            WHERE cat.CodeValue = 'Building'
             GROUP BY Parent.Id  
           ) built ON built.LotId = lot.ECInstanceId
           WHERE lot.classFullName = 'BisCore:SpatialLocationElement'
