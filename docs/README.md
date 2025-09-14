@@ -1,5 +1,7 @@
 # iTwin.js Documentation
 
+> Documento clave: consulte el estado actual del proyecto y el plan por fases en [PROJECT_STATUS.md](../docs/PROJECT_STATUS.md).
+
 Esta es la documentación completa de la librería iTwin.js, organizada en carpetas por categorías para facilitar la navegación y el mantenimiento.
 
 ## Estructura de Documentación
