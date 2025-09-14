@@ -12,6 +12,8 @@
  * @see https://www.itwinjs.org/bis/domains/buildingspatial.ecschema
  */
 
+import { Code } from '@itwin/core-common';
+
 // Type definitions to avoid backend imports in frontend/test environment
 export interface ElementProps {
   classFullName: string;
@@ -240,7 +242,7 @@ export class BISElementService {
         
         // Update all successful results with changeset ID
         elementResults.forEach(result => {
-          if (result.success) {
+          if (result.success && changesetId) {
             result.changesetId = changesetId;
           }
         });

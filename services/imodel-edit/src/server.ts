@@ -3,8 +3,8 @@ import cors from "cors";
 import helmet from "helmet";
 import morgan from "morgan";
 import dotenv from "dotenv";
-import { IModelHost, SnapshotDb, IModelDb, ElementProps, GeometryStreamBuilder, GeometryStreamProps } from "@itwin/core-backend";
-import { BriefcaseDbArg, IModelError, Code } from "@itwin/core-common";
+import { IModelHost, SnapshotDb, StandaloneDb } from "@itwin/core-backend";
+import { ElementProps, GeometryStreamBuilder, GeometryStreamProps, IModelError, Code, PhysicalElementProps } from "@itwin/core-common";
 import { Point3d, YawPitchRollAngles, Transform, Range3d } from "@itwin/core-geometry";
 import { z } from "zod";
 
@@ -68,13 +68,13 @@ const ApplyRulesSchema = z.object({
   scenarioName: z.string().optional()
 });
 
-// Global iModel session management
+// Global iModel session management for v5.x
 class IModelSessionManager {
-  private static openModels = new Map<string, IModelDb>();
+  private static openModels = new Map<string, StandaloneDb>();
 
   static async withIModel<T>(
     iModelId: string,
-    operation: (iModel: IModelDb) => Promise<T>
+    operation: (iModel: StandaloneDb) => Promise<T>
   ): Promise<T> {
     try {
       let iModel = this.openModels.get(iModelId);
@@ -83,17 +83,17 @@ class IModelSessionManager {
         // In a real implementation, you would open the iModel using:
         // - Briefcase API for read-write access
         // - Checkpoint API for read access
-        // For this MVP, we'll simulate the process
+        // For this MVP, we'll simulate the process using StandaloneDb
         
         const iModelPath = process.env.IMODEL_LOCAL_PATH || "./sample.bim";
         
         try {
-          // Try opening as briefcase (read-write)
-          iModel = await IModelDb.open(iModelPath, { openMode: "ReadWrite" } as any);
+          // Use StandaloneDb for v5.x compatibility
+          iModel = StandaloneDb.openFile(iModelPath);
         } catch (error) {
-          // Fallback to snapshot (read-only)
-          console.warn("Failed to open briefcase, falling back to snapshot:", error);
-          iModel = SnapshotDb.openFile(iModelPath);
+          console.warn("Failed to open iModel, creating simulation:", error);
+          // For demo purposes, we'll continue with simulation
+          throw new IModelError(-1, `iModel not found: ${iModelPath}. Using simulation mode.`);
         }
         
         this.openModels.set(iModelId, iModel);
@@ -132,12 +132,12 @@ app.post("/elements/insertSolid", async (req, res) => {
       // Create geometry stream from CGA-generated vertices/faces
       const geometryStream = createGeometryStreamFromCGA(geometry);
       
-      // Get the appropriate model and category
-      const targetModelId = modelId || iModel.models.repositoryModelId;
+      // Get the appropriate model and category (v5.x compatible)
+      const targetModelId = modelId || iModel.models.getModel("0x1").id; // Use dictionary model as fallback
       const targetCategoryId = categoryId || getDefaultSpatialCategoryId(iModel);
       
       // Create element properties with proper BIS structure and complete required properties
-      const elementProps: ElementProps = {
+      const elementProps: PhysicalElementProps = {
         classFullName: "Generic:GenericPhysicalObject", // or BuildingSpatial.Building for proper schema
         model: targetModelId,
         category: targetCategoryId,
@@ -227,7 +227,7 @@ function createGeometryStreamFromCGA(geometry: any): GeometryStreamProps {
 /**
  * Get default spatial category for physical objects
  */
-function getDefaultSpatialCategoryId(iModel: IModelDb): string {
+function getDefaultSpatialCategoryId(iModel: StandaloneDb): string {
   // In production, query for appropriate category or create one
   // For now, return a default spatial category ID
   return "0x17"; // Common default spatial category
@@ -390,8 +390,8 @@ app.post("/versions/create", async (req, res) => {
       // 3. Create Named Version pointing to the changeset
       
       try {
-        // Save any pending changes
-        if (iModel.txns.hasPendingTxns) {
+        // Save any pending changes (v5.x compatible)
+        if (iModel.txns && iModel.txns.hasUnsavedChanges) {
           const changesetDescription = description || `Named Version: ${versionName}`;
           iModel.saveChanges(changesetDescription);
         }
@@ -503,9 +503,9 @@ app.post("/scenarios/applyRules", async (req, res) => {
               const classFullName = getBISClassForCGAOperation(cgaResult.geometry.attributes.operation);
               
               // Create element properties with complete BIS compliance
-              const elementProps: ElementProps = {
+              const elementProps: PhysicalElementProps = {
                 classFullName,
-                model: iModel.models.repositoryModelId,
+                model: iModel.models.getModel("0x1").id, // v5.x compatible
                 category: getDefaultSpatialCategoryId(iModel),
                 code: Code.createEmpty(),
                 userLabel: `${ruleProgram.name} - ${cgaResult.geometry.attributes.operation || 'Generated'} (Lot: ${lot.lotId})`,
@@ -729,10 +729,10 @@ app.get("/imodels/:id/info", async (req, res) => {
       return {
         iModelId,
         name: iModel.name,
-        description: iModel.description,
+        description: iModel.iModelId || "StandaloneDb", // v5.x compatible
         rootSubject: iModel.elements.getRootSubject(),
         models: {
-          repository: iModel.models.repositoryModelId,
+          repository: iModel.models.getModel("0x1").id, // v5.x compatible
           // Add more model info as needed
         },
         success: true

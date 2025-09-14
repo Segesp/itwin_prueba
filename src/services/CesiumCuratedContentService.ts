@@ -364,7 +364,7 @@ export class CesiumCuratedContentService {
         tilesLoaded: Math.floor(100 + Math.random() * 50),
         tilesLoading: Math.floor(Math.random() * 10),
         memoryUsage: 120 + Math.random() * 80, // MB
-        recommendations: []
+        recommendations: [] as string[]
       };
 
       // Generate performance recommendations
