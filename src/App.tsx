@@ -7,6 +7,7 @@ import { Menu as MenuIcon, Close as CloseIcon } from '@mui/icons-material';
 import Sidebar from './components/Sidebar/Sidebar';
 import Home from './components/Home/Home';
 import UrbanViewer from './components/UrbanViewer/UrbanViewer';
+import RealITwinViewer from './components/RealITwinViewer';
 import CitizenDashboard from './components/CitizenDashboard/CitizenDashboard';
 import AdminDashboard from './components/AdminDashboard/AdminDashboard';
 import UrbanKPIDashboard from './components/UrbanKPIDashboard/UrbanKPIDashboard';
@@ -17,6 +18,7 @@ import SettingsPanel from './components/Settings/SettingsPanel';
 // Services
 import { ConnectionService } from './services/ConnectionService';
 import { NotificationService } from './services/NotificationService';
+import { shouldUseSimulationFallback, getFeatureFlag } from './utils/env-validation';
 
 // Types
 import { AppNotification } from './types/common';
@@ -25,6 +27,59 @@ import { AppNotification } from './types/common';
 import './styles/App.css';
 
 const DRAWER_WIDTH = 280;
+
+/**
+ * Smart Viewer Component - Chooses between Real iTwin Viewer and Simulation
+ */
+const SmartViewer: React.FC = () => {
+  const useSimulation = shouldUseSimulationFallback();
+  const enableITwinViewer = getFeatureFlag('REACT_APP_ENABLE_ITWIN_VIEWER', true);
+
+  console.log('🎯 Smart Viewer Configuration:', {
+    useSimulation,
+    enableITwinViewer,
+    viewerChoice: useSimulation ? 'Simulation' : 'Real iTwin'
+  });
+
+  if (!enableITwinViewer) {
+    return (
+      <div style={{ 
+        padding: '40px', 
+        textAlign: 'center',
+        backgroundColor: '#f8f9fa',
+        color: '#6c757d'
+      }}>
+        <h3>3D Viewer Disabled</h3>
+        <p>Enable REACT_APP_ENABLE_ITWIN_VIEWER to use the viewer</p>
+      </div>
+    );
+  }
+
+  if (useSimulation) {
+    console.log('🎮 Using simulation viewer (UrbanViewer)');
+    return <UrbanViewer />;
+  } else {
+    console.log('🏗️ Using real iTwin viewer');
+    return (
+      <RealITwinViewer
+        onIModelConnected={(iModel) => {
+          console.log('📋 iModel connected to Smart Viewer:', iModel.name);
+        }}
+        onViewerReady={() => {
+          console.log('✅ Real iTwin Viewer ready');
+        }}
+        onError={(error) => {
+          console.error('❌ Real iTwin Viewer error:', error);
+          // Could fall back to simulation here if needed
+        }}
+        onTelemetry={(data) => {
+          console.log('📊 Viewer telemetry:', data);
+        }}
+        style={{ height: '100%', width: '100%' }}
+      />
+    );
+  }
+};
 
 const App: React.FC = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -175,7 +230,7 @@ const App: React.FC = () => {
         
         <Routes>
           <Route path="/" element={<Home />} />
-          <Route path="/viewer" element={<UrbanViewer />} />
+          <Route path="/viewer" element={<SmartViewer />} />
           <Route path="/citizen" element={<CitizenDashboard />} />
           <Route path="/admin" element={<AdminDashboard />} />
           <Route path="/kpi" element={<UrbanKPIDashboard />} />
