@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ECSchema schemaName="Urban" alias="urban" version="01.00.00" xmlns="http://www.bentley.com/schemas/Bentley.ECXML.3.2">
+    
+    <ECSchemaReference name="BisCore" version="01.00.15" alias="bis"/>
+    <ECSchemaReference name="CoreCustomAttributes" version="01.00.03" alias="CoreCA"/>
+
+    <ECCustomAttributes>
+        <ProductionStatus xmlns="CoreCustomAttributes.01.00.03">
+            <SupportedUse>Production</SupportedUse>
+        </ProductionStatus>
+    </ECCustomAttributes>
+
+    <ECEntityClass typeName="UrbanMetricsAspect" modifier="Sealed">
+        <BaseClass>bis:ElementUniqueAspect</BaseClass>
+        <ECProperty propertyName="footprintArea" typeName="double" displayLabel="Footprint Area (m²)">
+            <ECCustomAttributes>
+                <HiddenProperty xmlns="CoreCustomAttributes.01.00.03"/>
+            </ECCustomAttributes>
+        </ECProperty>
+        <ECProperty propertyName="grossFloorArea" typeName="double" displayLabel="Gross Floor Area (m²)">
+            <ECCustomAttributes>
+                <HiddenProperty xmlns="CoreCustomAttributes.01.00.03"/>
+            </ECCustomAttributes>
+        </ECProperty>
+        <ECProperty propertyName="floors" typeName="int" displayLabel="Number of Floors">
+            <ECCustomAttributes>
+                <HiddenProperty xmlns="CoreCustomAttributes.01.00.03"/>
+            </ECCustomAttributes>
+        </ECProperty>
+        <ECProperty propertyName="calculationMethod" typeName="string" displayLabel="Calculation Method">
+            <ECCustomAttributes>
+                <HiddenProperty xmlns="CoreCustomAttributes.01.00.03"/>
+            </ECCustomAttributes>
+        </ECProperty>
+        <ECProperty propertyName="calculatedAt" typeName="dateTime" displayLabel="Calculation Timestamp">
+            <ECCustomAttributes>
+                <HiddenProperty xmlns="CoreCustomAttributes.01.00.03"/>
+            </ECCustomAttributes>
+        </ECProperty>
+        <ECProperty propertyName="crsCode" typeName="string" displayLabel="Coordinate Reference System">
+            <ECCustomAttributes>
+                <HiddenProperty xmlns="CoreCustomAttributes.01.00.03"/>
+            </ECCustomAttributes>
+        </ECProperty>
+    </ECEntityClass>
+
+    <ECEntityClass typeName="LotElement" modifier="Sealed">
+        <BaseClass>bis:SpatialElement</BaseClass>
+        <ECProperty propertyName="lotNumber" typeName="string" displayLabel="Lot Number"/>
+        <ECProperty propertyName="zoneType" typeName="string" displayLabel="Zone Type"/>
+        <ECProperty propertyName="area" typeName="double" displayLabel="Lot Area (m²)"/>
+        <ECProperty propertyName="blockId" typeName="string" displayLabel="Block Identifier"/>
+    </ECEntityClass>
+
+    <ECRelationshipClass typeName="ElementOwnsUrbanMetrics" strength="embedding" modifier="Sealed">
+        <BaseClass>bis:ElementOwnsUniqueAspect</BaseClass>
+        <Source multiplicity="(1..1)" roleLabel="owns" polymorphic="true">
+            <Class class="bis:Element"/>
+        </Source>
+        <Target multiplicity="(0..1)" roleLabel="is owned by" polymorphic="false">
+            <Class class="UrbanMetricsAspect"/>
+        </Target>
+    </ECRelationshipClass>
+
+</ECSchema>

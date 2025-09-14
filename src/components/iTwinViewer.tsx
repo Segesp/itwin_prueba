@@ -116,8 +116,8 @@ const iTwinViewer: React.FC = () => {
 
         setAuthClient(client);
         
-        // Check if already authenticated
-        if (await client.isSignedIn()) {
+        // Check if already authenticated (v2.x API)
+        if (client.hasSignedIn) {
           setIsAuthenticated(true);
           console.log('User already authenticated');
         }
@@ -427,13 +427,31 @@ const iTwinViewer: React.FC = () => {
       <div style={{ flex: 1, display: 'flex' }}>
         {/* iTwin Viewer */}
         <div style={{ flex: showABPanel ? 2 : 1 }}>
-          <Viewer
-            iTwinId={viewerConfig.iTwinId}
-            iModelId={viewerConfig.iModelId}
-            authClient={authClient}
-            onIModelConnected={handleViewerReady}
-            enablePerformanceMonitors={true}
-          />
+          {authClient && (
+            <Viewer
+              iTwinId={viewerConfig.iTwinId}
+              iModelId={viewerConfig.iModelId}
+              authClient={authClient}
+              onIModelConnected={handleViewerReady}
+              enablePerformanceMonitors={true}
+            />
+          )}
+          {!authClient && (
+            <div style={{ 
+              padding: '20px', 
+              textAlign: 'center',
+              backgroundColor: '#f5f5f5',
+              height: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}>
+              <div>
+                <h3>Initializing iTwin Viewer...</h3>
+                <p>Setting up authentication client...</p>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* A/B Scenario Comparison Panel with Visual Evidence */}

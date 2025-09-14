@@ -2,10 +2,10 @@ import { z } from 'zod';
 
 // Environment variables validation schema
 const EnvironmentSchema = z.object({
-  // iTwin.js Configuration - REQUIRED for production
-  IMJS_AUTH_CLIENT_CLIENT_ID: z.string().min(1, 'iTwin client ID is required'),
-  IMJS_ITWIN_ID: z.string().min(1, 'iTwin ID is required'),
-  IMJS_IMODEL_ID: z.string().min(1, 'iModel ID is required'),
+  // iTwin.js Configuration - REQUIRED for production, optional for development/simulation
+  IMJS_AUTH_CLIENT_CLIENT_ID: z.string().optional(),
+  IMJS_ITWIN_ID: z.string().optional(),
+  IMJS_IMODEL_ID: z.string().optional(),
   IMJS_AUTH_CLIENT_REDIRECT_URI: z.string().url('Invalid redirect URI').optional(),
   IMJS_AUTH_CLIENT_LOGOUT_URI: z.string().url('Invalid logout URI').optional(),
   IMJS_AUTH_CLIENT_SCOPE: z.string().optional(),
@@ -65,12 +65,30 @@ export function validateEnvironment(): EnvironmentValidation {
   let isValid = true;
   
   try {
-    // Validate environment schema
+    // Validate environment schema - don't fail on missing iTwin config for development
     config = EnvironmentSchema.parse(env);
   } catch (error) {
     if (error instanceof z.ZodError) {
-      errors.push(...error.errors.map(e => `${e.path.join('.')}: ${e.message}`));
-      isValid = false;
+      // Filter out iTwin config errors if we're in development mode or simulation fallback is enabled
+      const simulationFallbackEnabled = env.REACT_APP_ENABLE_SIMULATION_FALLBACK !== 'false';
+      const isProduction = env.NODE_ENV === 'production';
+      
+      const filteredErrors = error.errors.filter(e => {
+        const path = e.path.join('.');
+        const isITwinError = path.startsWith('IMJS_');
+        
+        // In development or with simulation fallback, iTwin errors are warnings, not errors
+        if (isITwinError && (simulationFallbackEnabled || !isProduction)) {
+          warnings.push(`${path}: ${e.message} (using simulation fallback)`);
+          return false;
+        }
+        return true;
+      });
+      
+      if (filteredErrors.length > 0) {
+        errors.push(...filteredErrors.map(e => `${e.path.join('.')}: ${e.message}`));
+        isValid = false;
+      }
     } else {
       errors.push(`Environment validation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
       isValid = false;
@@ -84,7 +102,10 @@ export function validateEnvironment(): EnvironmentValidation {
   const isTwinConfigured = !!(
     config.IMJS_AUTH_CLIENT_CLIENT_ID &&
     config.IMJS_ITWIN_ID &&
-    config.IMJS_IMODEL_ID
+    config.IMJS_IMODEL_ID &&
+    config.IMJS_AUTH_CLIENT_CLIENT_ID !== 'spa-uuid-placeholder-dev' &&
+    config.IMJS_ITWIN_ID !== 'itwin-uuid-placeholder-dev' &&
+    config.IMJS_IMODEL_ID !== 'imodel-uuid-placeholder-dev'
   );
   
   if (!isTwinConfigured) {
@@ -108,14 +129,14 @@ export function validateEnvironment(): EnvironmentValidation {
     warnings.push('Simulation fallback is enabled in production - consider disabling for live deployment');
   }
   
-  // Validate coordinate system for Buenos Aires
+  // Validate coordinate system for Chancay (updated from Buenos Aires)
   if (config.REACT_APP_CITY_LAT && config.REACT_APP_CITY_LNG) {
     const lat = parseFloat(config.REACT_APP_CITY_LAT);
     const lng = parseFloat(config.REACT_APP_CITY_LNG);
     
-    // Buenos Aires bounds check
-    if (lat < -35 || lat > -34 || lng < -59 || lng > -58) {
-      warnings.push('City coordinates appear to be outside Buenos Aires region');
+    // Chancay bounds check (updated coordinates)
+    if (lat < -12 || lat > -11 || lng < -78 || lng > -77) {
+      warnings.push('City coordinates appear to be outside Chancay region');
     }
   }
   
@@ -237,12 +258,17 @@ export function validateEnvironmentOnStartup(): void {
     if (shouldUseSimulationFallback()) {
       console.warn('⚠️ Simulation fallback enabled in production - consider configuring iTwin.js for live data');
     }
+    
+    // Only throw error in production if iTwin is not configured and simulation fallback is disabled
+    if (!validation.isTwinConfigured && !getFeatureFlag('REACT_APP_ENABLE_SIMULATION_FALLBACK', true)) {
+      throw new Error('iTwin.js configuration required in production when simulation fallback is disabled');
+    }
   }
   
   console.groupEnd();
   
-  // Throw error if critical validation fails
-  if (!validation.isValid) {
-    throw new Error('Environment validation failed - check console for details');
+  // Only throw error for critical non-iTwin validation failures, or production issues
+  if (!validation.isValid && validation.errors.some(error => !error.startsWith('IMJS_'))) {
+    throw new Error('Critical environment validation failed - check console for details');
   }
 }

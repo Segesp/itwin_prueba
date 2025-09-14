@@ -51,6 +51,8 @@ import {
 } from '@mui/icons-material';
 
 import { ChangeTrackingService, ChangeComparison, ViewDecoration } from '../services/ChangeTrackingService';
+import { changedElementsV2Service, ChangedElementsComparison } from '../services/ChangedElementsV2Service';
+import ChangedElementsV2Panel from './ChangedElementsV2Panel';
 
 interface ABScenarioProps {
   iModelConnection?: any;
@@ -807,6 +809,35 @@ const ABScenarioComparison: React.FC<ABScenarioProps> = ({
                   </Typography>
                 )}
               </Box>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Changed Elements v2 Panel - Real API Integration */}
+        {iModelConnection && (
+          <Card sx={{ mt: 2 }}>
+            <CardContent>
+              <Typography variant="h6" gutterBottom>
+                🔄 Real Changed Elements API v2 Integration
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                Production-ready iTwin Platform API integration with PKCE authentication, 
+                preflight validation, and enhanced performance monitoring.
+              </Typography>
+              
+              <ChangedElementsV2Panel
+                iModelConnection={iModelConnection}
+                onElementSelected={(elementId) => {
+                  console.log('🎯 Element selected from v2 panel:', elementId);
+                  // Could update current selection or sync with existing comparison
+                }}
+                onZoomToElement={(elementId) => {
+                  console.log('🔍 Zoom to element from v2 panel:', elementId);
+                  // Could integrate with viewer zoom functionality
+                }}
+                initialFromChangeset={comparison?.startChangesetId}
+                initialToChangeset={comparison?.endChangesetId}
+              />
             </CardContent>
           </Card>
         )}
