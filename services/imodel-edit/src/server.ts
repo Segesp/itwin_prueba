@@ -4,9 +4,12 @@ import helmet from "helmet";
 import morgan from "morgan";
 import dotenv from "dotenv";
 import { IModelHost, SnapshotDb, StandaloneDb } from "@itwin/core-backend";
-import { ElementProps, GeometryStreamBuilder, GeometryStreamProps, IModelError, Code, PhysicalElementProps } from "@itwin/core-common";
-import { Point3d, YawPitchRollAngles, Transform, Range3d } from "@itwin/core-geometry";
+import { ElementProps, GeometryStreamBuilder, GeometryStreamProps, IModelError, Code, PhysicalElementProps, ElementAspectProps } from "@itwin/core-common";
+import { Point3d, YawPitchRollAngles, Transform, Range3d, Point2d } from "@itwin/core-geometry";
+import { SchemaContext, Schema } from "@itwin/ecschema-metadata";
 import { z } from "zod";
+import * as path from "path";
+import { CRSMiddleware } from "./middleware/crs-middleware";
 
 // Load environment variables
 dotenv.config();
@@ -68,6 +71,198 @@ const ApplyRulesSchema = z.object({
   scenarioName: z.string().optional()
 });
 
+/**
+ * UrbanMetricsCalculator - Calculates urban metrics from CGA-generated geometry
+ * Supports EPSG:32718 (UTM 18S) calculations for Chancay, Peru
+ */
+interface UrbanMetrics {
+  footprintArea: number;    // m² in UTM18S
+  grossFloorArea: number;   // m² in UTM18S
+  floors: number;           // floor count
+  calculationMethod: string;
+  calculatedAt: Date;
+  crsCode: string;
+}
+
+interface CGAGeometry {
+  vertices: number[][];
+  faces?: number[][];
+  attributes?: {
+    floors?: number;
+    floorHeight?: number;
+    buildingHeight?: number;
+  };
+}
+
+class UrbanMetricsCalculator {
+  private static readonly TARGET_CRS = "EPSG:32718"; // UTM Zone 18S for Chancay, Peru
+  
+  /**
+   * Calculate urban metrics from CGA-generated geometry
+   * All area calculations performed in UTM18S meters
+   */
+  static calculateMetrics(geometry: CGAGeometry): UrbanMetrics {
+    try {
+      // 1. Calculate footprint area from polygon vertices
+      const footprintArea = this.calculateFootprintArea(geometry.vertices);
+      
+      // 2. Determine floor count from geometry attributes or height analysis
+      const floors = this.determineFloorCount(geometry);
+      
+      // 3. Calculate gross floor area (footprint × floors)
+      const grossFloorArea = footprintArea * floors;
+      
+      console.log(`📊 Urban Metrics Calculated:`, {
+        footprintArea: `${Math.round(footprintArea)} m²`,
+        grossFloorArea: `${Math.round(grossFloorArea)} m²`,
+        floors,
+        crs: this.TARGET_CRS
+      });
+
+      return {
+        footprintArea: Math.round(footprintArea * 100) / 100, // Round to cm precision
+        grossFloorArea: Math.round(grossFloorArea * 100) / 100,
+        floors,
+        calculationMethod: "CGA_GEOMETRY_ANALYSIS",
+        calculatedAt: new Date(),
+        crsCode: this.TARGET_CRS
+      };
+
+    } catch (error) {
+      console.error("❌ Failed to calculate urban metrics:", error);
+      
+      // Return default metrics on calculation failure
+      return {
+        footprintArea: 0,
+        grossFloorArea: 0,
+        floors: 1,
+        calculationMethod: "DEFAULT_FALLBACK",
+        calculatedAt: new Date(),
+        crsCode: this.TARGET_CRS
+      };
+    }
+  }
+
+  /**
+   * Calculate footprint area from polygon vertices using Shoelace formula
+   * Assumes vertices are in UTM18S coordinates (meters)
+   */
+  private static calculateFootprintArea(vertices: number[][]): number {
+    if (vertices.length < 3) {
+      console.warn("Insufficient vertices for area calculation, using default");
+      return 100; // Default 100 m² for single vertex/line
+    }
+
+    try {
+      // Convert to Point2d array for 2D area calculation (ignore Z coordinate)
+      const points2d = vertices.map(v => Point2d.create(v[0], v[1]));
+      
+      // Create closed polygon if not already closed
+      const lastPoint = points2d[points2d.length - 1];
+      const firstPoint = points2d[0];
+      if (!lastPoint.isAlmostEqual(firstPoint)) {
+        points2d.push(firstPoint);
+      }
+
+      // Shoelace formula for polygon area
+      let area = 0;
+      for (let i = 0; i < points2d.length - 1; i++) {
+        const curr = points2d[i];
+        const next = points2d[i + 1];
+        area += (curr.x * next.y) - (next.x * curr.y);
+      }
+      
+      return Math.abs(area) / 2; // Take absolute value and divide by 2
+
+    } catch (error) {
+      console.error("Error calculating footprint area:", error);
+      
+      // Fallback: estimate area from bounding box
+      return this.calculateBoundingBoxArea(vertices);
+    }
+  }
+
+  /**
+   * Calculate area from bounding box as fallback method
+   */
+  private static calculateBoundingBoxArea(vertices: number[][]): number {
+    if (vertices.length === 0) return 100;
+
+    let minX = Infinity, maxX = -Infinity;
+    let minY = Infinity, maxY = -Infinity;
+
+    for (const vertex of vertices) {
+      minX = Math.min(minX, vertex[0]);
+      maxX = Math.max(maxX, vertex[0]);
+      minY = Math.min(minY, vertex[1]);
+      maxY = Math.max(maxY, vertex[1]);
+    }
+
+    const width = maxX - minX;
+    const height = maxY - minY;
+    
+    console.log(`📐 Bounding box fallback: ${width.toFixed(1)}m × ${height.toFixed(1)}m`);
+    return width * height;
+  }
+
+  /**
+   * Determine floor count from geometry attributes or height analysis
+   */
+  private static determineFloorCount(geometry: CGAGeometry): number {
+    // 1. Check explicit floor count in attributes
+    if (geometry.attributes?.floors) {
+      return Math.max(1, Math.floor(geometry.attributes.floors));
+    }
+
+    // 2. Calculate from building height and typical floor height
+    if (geometry.attributes?.buildingHeight || geometry.attributes?.floorHeight) {
+      const buildingHeight = geometry.attributes.buildingHeight || 
+                           (geometry.attributes.floorHeight! * (geometry.attributes.floors || 1));
+      const typicalFloorHeight = geometry.attributes.floorHeight || 3.5; // 3.5m typical
+      
+      return Math.max(1, Math.floor(buildingHeight / typicalFloorHeight));
+    }
+
+    // 3. Calculate from Z-extent of vertices
+    if (geometry.vertices.length > 0) {
+      let minZ = Infinity, maxZ = -Infinity;
+      
+      for (const vertex of geometry.vertices) {
+        if (vertex.length > 2) { // Has Z coordinate
+          minZ = Math.min(minZ, vertex[2]);
+          maxZ = Math.max(maxZ, vertex[2]);
+        }
+      }
+      
+      if (isFinite(minZ) && isFinite(maxZ)) {
+        const height = maxZ - minZ;
+        const floors = Math.max(1, Math.floor(height / 3.5)); // 3.5m per floor
+        console.log(`📏 Height analysis: ${height.toFixed(1)}m → ${floors} floors`);
+        return floors;
+      }
+    }
+
+    // 4. Default to 1 floor
+    return 1;
+  }
+
+  /**
+   * Create UrbanMetricsAspect properties for iTwin.js element
+   */
+  static createAspectProps(elementId: string, metrics: UrbanMetrics): any {
+    return {
+      classFullName: "Urban:UrbanMetricsAspect",
+      element: { id: elementId },
+      footprintArea: metrics.footprintArea,
+      grossFloorArea: metrics.grossFloorArea,
+      floors: metrics.floors,
+      calculationMethod: metrics.calculationMethod,
+      calculatedAt: metrics.calculatedAt.toISOString(),
+      crsCode: metrics.crsCode
+    };
+  }
+}
+
 // Global iModel session management for v5.x
 class IModelSessionManager {
   private static openModels = new Map<string, StandaloneDb>();
@@ -123,8 +318,16 @@ class IModelSessionManager {
 /**
  * POST /elements/insertSolid
  * Insert a 3D solid geometry into the iModel using real iTwin SDK
+ * Includes CRS validation middleware for EPSG:32718 (UTM 18S) enforcement
  */
-app.post("/elements/insertSolid", async (req, res) => {
+app.post("/elements/insertSolid", 
+  // Apply CRS middleware for Chancay region validation
+  CRSMiddleware.validate({
+    enforceChancayAOI: true,
+    allowReprojection: true,
+    logTransformations: true
+  }),
+  async (req, res) => {
   try {
     const { iModelId, geometry, categoryId, modelId } = InsertSolidSchema.parse(req.body);
 
@@ -156,8 +359,28 @@ app.post("/elements/insertSolid", async (req, res) => {
       // Insert element using proper iTwin SDK pattern
       const elementId = iModel.elements.insertElement(elementProps);
       
-      // CRITICAL: Save changes immediately after insertion
-      const changesetDescription = `Insert CGA-generated building geometry - ${new Date().toISOString()}`;
+      // 🏗️ CALCULATE AND PERSIST URBAN METRICS ASPECT
+      try {
+        // Calculate metrics from CGA geometry in UTM18S
+        const urbanMetrics = UrbanMetricsCalculator.calculateMetrics(geometry);
+        
+        // Create and insert UrbanMetricsAspect
+        const aspectProps = UrbanMetricsCalculator.createAspectProps(elementId, urbanMetrics);
+        const aspectId = iModel.elements.insertAspect(aspectProps);
+        
+        console.log(`📊 UrbanMetricsAspect ${aspectId} attached to element ${elementId}:`, {
+          footprintArea: `${urbanMetrics.footprintArea} m²`,
+          grossFloorArea: `${urbanMetrics.grossFloorArea} m²`,
+          floors: urbanMetrics.floors,
+          crs: urbanMetrics.crsCode
+        });
+
+      } catch (aspectError) {
+        console.error("⚠️ Failed to attach UrbanMetricsAspect (element still created):", aspectError);
+      }
+      
+      // CRITICAL: Save changes immediately after insertion (includes aspect)
+      const changesetDescription = `Insert CGA building with urban metrics - ${new Date().toISOString()}`;
       iModel.saveChanges(changesetDescription);
 
       // Create Named Version after significant batch of operations
